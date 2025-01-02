@@ -125,34 +125,38 @@ const buildConfig = baseConfig.clone()
         ...commonHtmlWebpackPluginOptions,
         chunks: ['gui'],
         template: 'src/playground/index.ejs',
-        title: 'Scratch 3.0 GUI'
+        title: 'Hcratch3 Editor'
     }))
     .addPlugin(new HtmlWebpackPlugin({
         ...commonHtmlWebpackPluginOptions,
         chunks: ['blocksonly'],
         filename: 'blocks-only.html',
         template: 'src/playground/index.ejs',
-        title: 'Scratch 3.0 GUI: Blocks Only Example'
+        title: 'Hcratch3 Blocks Only'
     }))
     .addPlugin(new HtmlWebpackPlugin({
         ...commonHtmlWebpackPluginOptions,
         chunks: ['compatibilitytesting'],
         filename: 'compatibility-testing.html',
         template: 'src/playground/index.ejs',
-        title: 'Scratch 3.0 GUI: Compatibility Testing'
+        title: 'Hcratch3 Compatibility Testing'
     }))
     .addPlugin(new HtmlWebpackPlugin({
         ...commonHtmlWebpackPluginOptions,
         chunks: ['player'],
         filename: 'player.html',
         template: 'src/playground/index.ejs',
-        title: 'Scratch 3.0 GUI: Player Example'
+        title: 'Hcratch3 Player'
     }))
     .addPlugin(new CopyWebpackPlugin({
         patterns: [
             {
                 from: 'static',
                 to: 'static'
+            },
+            {
+                from: 'extension-worker.{js,js.map}',
+                context: 'node_modules/scratch-vm/dist/web'
             },
             {
                 from: 'extensions/**',
