@@ -4,7 +4,7 @@ const webpack = require('webpack');
 // Plugins
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
-const UglifyJsPlugin = require('uglifyjs-webpack-plugin');
+const TerserPlugin = require('terser-webpack-plugin'); // UglifyJsPlugin を TerserPlugin に変更
 const CreateFileWebpack = require('create-file-webpack');
 
 // PostCSS
@@ -109,17 +109,15 @@ const baseConfig = {
     optimization: {
         splitChunks: { chunks: 'all', name: 'lib.min' },
         runtimeChunk: { name: 'runtime' },
-        optimization: {
-          minimizer: [
+        minimizer: [
             new TerserPlugin({
-              include: /\.min\.js$/,
-              terserOptions: {
-                compress: true,
-                mangle: true
-              }
+                include: /\.min\.js$/,
+                terserOptions: {
+                    compress: true,
+                    mangle: true
+                }
             })
-          ]
-        }
+        ]
     },
     devServer: {
         contentBase: path.resolve(__dirname, 'build'),
