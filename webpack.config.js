@@ -109,9 +109,17 @@ const baseConfig = {
     optimization: {
         splitChunks: { chunks: 'all', name: 'lib.min' },
         runtimeChunk: { name: 'runtime' },
-        minimizer: [
-            new UglifyJsPlugin({ include: /\.min\.js$/ })
-        ]
+        optimization: {
+          minimizer: [
+            new TerserPlugin({
+              include: /\.min\.js$/,
+              terserOptions: {
+                compress: true,
+                mangle: true
+              }
+            })
+          ]
+        }
     },
     devServer: {
         contentBase: path.resolve(__dirname, 'build'),
