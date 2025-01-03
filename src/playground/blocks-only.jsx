@@ -20,7 +20,7 @@ const BlocksOnly = props => (
         <VMBlocks
             grow={1}
             options={{
-                media: `./static/blocks-media/`
+                media: `static/blocks-media/default/`
             }}
         />
         <VMControls className={styles.controls} />
