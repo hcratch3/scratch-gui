@@ -15,7 +15,7 @@ const mapStateToProps = state => ({vm: state.scratchGui.vm});
 const VMBlocks = connect(mapStateToProps)(Blocks);
 const VMControls = connect(mapStateToProps)(Controls);
 
-import addExtensionIcon from './components/gui/icon--extensions.svg';
+import addExtensionIcon from '../components/gui/icon--extensions.svg';
 
 const BlocksOnly = props => (
     <GUI {...props}>
