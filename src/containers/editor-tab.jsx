@@ -9,12 +9,6 @@ import AssetPanel from '../components/asset-panel/asset-panel.jsx';
 import {connect} from 'react-redux';
 
 import {
-    closeSoundLibrary,
-    openSoundLibrary,
-    openSoundRecorder
-} from '../reducers/modals';
-
-import {
     activateTab,
     COSTUMES_TAB_INDEX
 } from '../reducers/editor-tab';
@@ -61,57 +55,7 @@ class EditorTab extends React.Component {
         });
 
         return (
-            <AssetPanel
-                buttons={[{
-                    title: intl.formatMessage(messages.addSound),
-                    img: addSoundFromLibraryIcon,
-                    onClick: onNewSoundFromLibraryClick
-                }, {
-                    title: intl.formatMessage(messages.fileUploadSound),
-                    img: fileUploadIcon,
-                    onClick: this.handleFileUploadClick,
-                    fileAccept: '.wav, .mp3',
-                    fileChange: this.handleSoundUpload,
-                    fileInput: this.setFileInput,
-                    fileMultiple: true
-                }, {
-                    title: intl.formatMessage(messages.surpriseSound),
-                    img: surpriseIcon,
-                    onClick: this.handleSurpriseSound
-                }, {
-                    title: intl.formatMessage(messages.recordSound),
-                    img: addSoundFromRecordingIcon,
-                    onClick: onNewSoundFromRecordingClick
-                }, {
-                    title: intl.formatMessage(messages.addSound),
-                    img: searchIcon,
-                    onClick: onNewSoundFromLibraryClick
-                }]}
-                dragType={DragConstants.SOUND}
-                isRtl={isRtl}
-                items={sounds}
-                selectedItemIndex={this.state.selectedSoundIndex}
-                onDeleteClick={this.handleDeleteSound}
-                onDrop={this.handleDrop}
-                onDuplicateClick={this.handleDuplicateSound}
-                onExportClick={this.handleExportSound}
-                onItemClick={this.handleSelectSound}
-            >
-                {sprite.sounds && sprite.sounds[this.state.selectedSoundIndex] ? (
-                    <SoundEditor soundIndex={this.state.selectedSoundIndex} />
-                ) : null}
-                {this.props.soundRecorderVisible ? (
-                    <RecordModal
-                        onNewSound={this.handleNewSound}
-                    />
-                ) : null}
-                {this.props.soundLibraryVisible ? (
-                    <SoundLibrary
-                        vm={this.props.vm}
-                        onNewSound={this.handleNewSound}
-                        onRequestClose={this.props.onRequestCloseSoundLibrary}
-                    />
-                ) : null}
+            <AssetPanel>
             </AssetPanel>
         );
     }
