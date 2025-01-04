@@ -126,6 +126,6 @@ const mapStateToProps = state => ({
     vm: state.scratchGui.vm
 });
 
-export default errorBoundaryHOC('EditorTab')(
-    connect(mapStateToProps)(EditorTab)
+export default errorBoundaryHOC('SourceTab')(
+    connect(mapStateToProps)(SourceTab)
 );
