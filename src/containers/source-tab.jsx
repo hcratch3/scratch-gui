@@ -1,50 +1,79 @@
-import PropTypes from 'prop-types';
 import React from 'react';
+import PropTypes from 'prop-types';
 import bindAll from 'lodash.bindall';
-import {connect} from 'react-redux';
+import { connect } from 'react-redux';
+
 import VM from 'scratch-vm';
-
-import {
-    activateTab,
-    SOURCE_TAB_INDEX
-} from '../reducers/editor-tab';
-
-import {setRestore} from '../reducers/restore-deletion';
+import { activateTab, SOURCE_TAB_INDEX } from '../reducers/editor-tab';
+import { setRestore } from '../reducers/restore-deletion';
 import errorBoundaryHOC from '../lib/error-boundary-hoc.jsx';
 
-class EditorTab extends React.Component {
+class SourceTab extends React.Component {
     constructor(props) {
         super(props);
-        bindAll(this, [
-            'handleCodeChange',
-            'handleSpriteChange'
-        ]);
+        bindAll(this, ['handleCodeChange']);
+        this.editorRef = React.createRef();
 
-        // スプライトごとのコードを保持
         this.state = {
             spriteCode: this.initializeSpriteCode(props.sprites, props.stage),
-            selectedSpriteId: props.editingTarget // 現在選択されているスプライトID
+            selectedSpriteId: props.editingTarget,
+            editorLoaded: false // エディタがロード済みかを管理
         };
     }
 
-    componentWillReceiveProps(nextProps) {
-        // スプライトが追加された場合に初期化
-        if (Object.keys(nextProps.sprites).length !== Object.keys(this.props.sprites).length) {
-            this.setState({
-                spriteCode: this.initializeSpriteCode(nextProps.sprites, nextProps.stage)
+    componentDidMount() {
+        // CodeMirrorのCSSとJSをCDNからロード
+        const loadScript = (src) => {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.async = true;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.body.appendChild(script);
             });
-        }
+        };
 
-        // 編集対象スプライトが変わった場合に選択を更新
-        if (nextProps.editingTarget !== this.props.editingTarget) {
-            this.setState({selectedSpriteId: nextProps.editingTarget});
+        const loadStyle = (href) => {
+            return new Promise((resolve, reject) => {
+                const link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = href;
+                link.onload = resolve;
+                link.onerror = reject;
+                document.head.appendChild(link);
+            });
+        };
+
+        Promise.all([
+            loadStyle('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.7/codemirror.min.css'),
+            loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.7/codemirror.min.js'),
+            loadScript('https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.7/mode/javascript/javascript.min.js')
+        ])
+            .then(() => {
+                this.initializeEditor();
+            })
+            .catch((error) => {
+                console.error('Failed to load CodeMirror:', error);
+            });
+    }
+
+    componentWillUnmount() {
+        if (this.editor) {
+            this.editor.toTextArea();
+        }
+    }
+
+    componentDidUpdate(prevProps, prevState) {
+        if (prevState.selectedSpriteId !== this.state.selectedSpriteId && this.state.editorLoaded) {
+            const newCode = this.state.spriteCode[this.state.selectedSpriteId] || '';
+            this.editor.setValue(newCode);
         }
     }
 
     initializeSpriteCode(sprites, stage) {
         const codeMap = {};
-        // スプライトとステージの初期コードを空文字列で設定
-        Object.keys(sprites).forEach(spriteId => {
+        Object.keys(sprites).forEach((spriteId) => {
             codeMap[spriteId] = '';
         });
         if (stage) {
@@ -53,11 +82,28 @@ class EditorTab extends React.Component {
         return codeMap;
     }
 
-    handleCodeChange(event) {
-        const newCode = event.target.value;
-        const {selectedSpriteId, spriteCode} = this.state;
+    initializeEditor() {
+        if (!window.CodeMirror) {
+            console.error('CodeMirror is not loaded.');
+            return;
+        }
 
-        // 選択中のスプライトのコードを更新
+        this.editor = window.CodeMirror(this.editorRef.current, {
+            mode: 'javascript',
+            lineNumbers: true,
+            lineWrapping: true,
+            value: this.state.spriteCode[this.state.selectedSpriteId] || ''
+        });
+
+        this.editor.on('change', this.handleCodeChange);
+
+        this.setState({ editorLoaded: true });
+    }
+
+    handleCodeChange() {
+        const newCode = this.editor.getValue();
+        const { selectedSpriteId, spriteCode } = this.state;
+
         this.setState({
             spriteCode: {
                 ...spriteCode,
@@ -66,59 +112,27 @@ class EditorTab extends React.Component {
         });
     }
 
-    handleSpriteChange(spriteId) {
-        // スプライトの切り替え
-        this.setState({selectedSpriteId: spriteId});
-    }
-
-    render () {
-        const {
-            dispatchUpdateRestore, // eslint-disable-line no-unused-vars
-            intl,
-            isRtl,
-            vm
-        } = this.props;
-
-        if (!vm.editingTarget) {
+    render() {
+        if (!this.props.vm.editingTarget) {
             return null;
         }
 
-        const isStage = vm.editingTarget.isStage;
-        const target = vm.editingTarget.sprite;
-
         return (
-            <AssetPanel
-                dragType={DragConstants.COSTUME}
-                isRtl={isRtl}
-            >
-                <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.css">
-                <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.js"></script>
-                <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/mode/javascript/javascript.min.js"></script>
-                <div>
-                    <textarea id="txt-editor"></textarea>
-
-                    <script type="text/javascript">
-                        editor = CodeMirror.fromTextArea(document.getElementById("txt-editor"),
-                        {
-                            mode:"javascript",
-                            lineNumbers: true,　 // 行番号を表示する
-                            lineWrapping: true,　 // 行を折り返す
-                        });
-                    </script>
-                </div> 
-            </AssetPanel>
+            <div>
+                <div ref={this.editorRef} style={{ height: '100%', width: '100%' }} />
+            </div>
         );
     }
 }
 
-EditorTab.propTypes = {
+SourceTab.propTypes = {
     editingTarget: PropTypes.string,
     sprites: PropTypes.object.isRequired,
     stage: PropTypes.object,
     vm: PropTypes.instanceOf(VM).isRequired
 };
 
-const mapStateToProps = state => ({
+const mapStateToProps = (state) => ({
     editingTarget: state.scratchGui.targets.editingTarget,
     sprites: state.scratchGui.targets.sprites,
     stage: state.scratchGui.targets.stage,
