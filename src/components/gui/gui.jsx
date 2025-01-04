@@ -14,7 +14,7 @@ import Blocks from '../../containers/blocks.jsx';
 import CostumeTab from '../../containers/costume-tab.jsx';
 import TargetPane from '../../containers/target-pane.jsx';
 import SoundTab from '../../containers/sound-tab.jsx';
-import EditorTab from '../../containers/editor-tab.jsx';
+import SourceTab from '../../containers/source-tab.jsx';
 import StageWrapper from '../../containers/stage-wrapper.jsx';
 import Loader from '../loader/loader.jsx';
 import Box from '../box/box.jsx';
@@ -85,7 +85,7 @@ const GUIComponent = props => {
         connectionModalVisible,
         costumeLibraryVisible,
         costumesTabVisible,
-        editorTabVisible,
+        sourceTabVisible,
         debugModalVisible,
         enableCommunity,
         intl,
@@ -107,7 +107,7 @@ const GUIComponent = props => {
         onToggleLoginOpen,
         onActivateCostumesTab,
         onActivateSoundsTab,
-        onActivateEditorTab,
+        onActivateSourceTab,
         onActivateTab,
         onClickLogo,
         onExtensionButtonClick,
@@ -320,12 +320,12 @@ const GUIComponent = props => {
                                     >
                                         <img
                                             draggable={false}
-                                            src={editorIcon}
+                                            src={sourceIcon}
                                         />
                                         <FormattedMessage
-                                            defaultMessage="Editor"
-                                            description="Button to get to the editor panel"
-                                            id="gui.gui.editorTab"
+                                            defaultMessage="Source"
+                                            description="Button to get to the source panel"
+                                            id="gui.gui.sourceTab"
                                         />
                                     </Tab>
                                 </TabList>
@@ -368,7 +368,7 @@ const GUIComponent = props => {
                                     {soundsTabVisible ? <SoundTab vm={vm} /> : null}
                                 </TabPanel>
                                 <TabPanel className={tabClassNames.tabPanel}>
-                                    {editorTabVisible ? <EditorTab vm={vm} /> : null}
+                                    {sourceTabVisible ? <SourceTab vm={vm} /> : null}
                                 </TabPanel>
                             </Tabs>
                             {backpackVisible ? (
@@ -426,7 +426,7 @@ GUIComponent.propTypes = {
     costumeLibraryVisible: PropTypes.bool,
     costumesTabVisible: PropTypes.bool,
     debugModalVisible: PropTypes.bool,
-    editorTabVisible: PropTypes.bool,
+    sourceTabVisible: PropTypes.bool,
     enableCommunity: PropTypes.bool,
     intl: intlShape.isRequired,
     isCreating: PropTypes.bool,
@@ -439,7 +439,7 @@ GUIComponent.propTypes = {
     logo: PropTypes.string,
     onActivateCostumesTab: PropTypes.func,
     onActivateSoundsTab: PropTypes.func,
-    onActivateEditorTab: PropTypes.func,
+    onActivateSourceTab: PropTypes.func,
     onActivateTab: PropTypes.func,
     onClickAccountNav: PropTypes.func,
     onClickLogo: PropTypes.func,
