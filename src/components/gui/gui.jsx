@@ -316,7 +316,7 @@ const GUIComponent = props => {
                                     </Tab>
                                     <Tab
                                         className={tabClassNames.tab}
-                                        onClick={onActivateEditorTab}
+                                        onClick={onActivateSourceTab}
                                     >
                                         <img
                                             draggable={false}
