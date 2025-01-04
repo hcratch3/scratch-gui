@@ -71,48 +71,30 @@ class EditorTab extends React.Component {
         this.setState({selectedSpriteId: spriteId});
     }
 
-    render() {
-        const {spriteCode, selectedSpriteId} = this.state;
-        const {sprites, stage} = this.props;
+    render () {
+        const {
+            dispatchUpdateRestore, // eslint-disable-line no-unused-vars
+            intl,
+            isRtl,
+            vm
+        } = this.props;
 
-        const currentCode = spriteCode[selectedSpriteId] || '';
+        if (!vm.editingTarget) {
+            return null;
+        }
+
+        const isStage = vm.editingTarget.isStage;
+        const target = vm.editingTarget.sprite;
 
         return (
-            <div className="editor-tab">
-                <div className="sprite-selector">
-                    <h3>Sprites</h3>
-                    <ul>
-                        {/* スプライトのリストを表示 */}
-                        {Object.keys(sprites).map(spriteId => (
-                            <li
-                                key={spriteId}
-                                className={spriteId === selectedSpriteId ? 'selected' : ''}
-                                onClick={() => this.handleSpriteChange(spriteId)}
-                            >
-                                {sprites[spriteId].name}
-                            </li>
-                        ))}
-                        {/* ステージも選択可能 */}
-                        {stage && (
-                            <li
-                                key={stage.id}
-                                className={stage.id === selectedSpriteId ? 'selected' : ''}
-                                onClick={() => this.handleSpriteChange(stage.id)}
-                            >
-                                Stage
-                            </li>
-                        )}
-                    </ul>
-                </div>
-                <div className="code-editor">
-                    <h3>Code Editor</h3>
-                    <textarea
-                        value={currentCode}
-                        onChange={this.handleCodeChange}
-                        placeholder="Write your code here..."
-                    />
-                </div>
-            </div>
+            <AssetPanel
+                dragType={DragConstants.COSTUME}
+                isRtl={isRtl}
+            >
+                <div>
+                    Example
+                </div> 
+            </AssetPanel>
         );
     }
 }
