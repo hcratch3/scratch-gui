@@ -95,6 +95,8 @@ class SourceTab extends React.Component {
             value: this.state.spriteCode[this.state.selectedSpriteId] || ''
         });
 
+        this.editor.setSize("100%", "100%");
+
         this.editor.on('change', this.handleCodeChange);
 
         this.setState({ editorLoaded: true });
