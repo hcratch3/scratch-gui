@@ -4,6 +4,11 @@ import bindAll from 'lodash.bindall';
 import {connect} from 'react-redux';
 import VM from 'scratch-vm';
 
+import {
+    activateTab,
+    SOURCE_TAB_INDEX
+} from '../reducers/editor-tab';
+
 import {setRestore} from '../reducers/restore-deletion';
 import errorBoundaryHOC from '../lib/error-boundary-hoc.jsx';
 
