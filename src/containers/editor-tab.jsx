@@ -73,7 +73,7 @@ class EditorTab extends React.Component {
         const currentCode = spriteCode[selectedSpriteId] || '';
 
         return (
-            <div className="code-editor-tab">
+            <div className="editor-tab">
                 <div className="sprite-selector">
                     <h3>Sprites</h3>
                     <ul>
@@ -126,6 +126,6 @@ const mapStateToProps = state => ({
     vm: state.scratchGui.vm
 });
 
-export default errorBoundaryHOC('CodeEditorTab')(
-    connect(mapStateToProps)(CodeEditorTab)
+export default errorBoundaryHOC('EditorTab')(
+    connect(mapStateToProps)(EditorTab)
 );
