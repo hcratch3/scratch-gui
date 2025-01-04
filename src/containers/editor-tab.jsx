@@ -19,12 +19,7 @@ import {showStandardAlert, closeAlertWithId} from '../reducers/alerts';
 class EditorTab extends React.Component {
     render () {
         const {
-            dispatchUpdateRestore, // eslint-disable-line no-unused-vars
-            intl,
-            isRtl,
-            vm,
-            onNewSoundFromLibraryClick,
-            onNewSoundFromRecordingClick
+            vm
         } = this.props;
 
         if (!vm.editingTarget) {
@@ -56,24 +51,14 @@ class EditorTab extends React.Component {
 
         return (
             <AssetPanel>
+                <div>Hello</div>
             </AssetPanel>
         );
     }
 }
 
-SoundTab.propTypes = {
-    dispatchUpdateRestore: PropTypes.func,
-    editingTarget: PropTypes.string,
-    intl: intlShape,
-    isRtl: PropTypes.bool,
-    onActivateCostumesTab: PropTypes.func.isRequired,
-    onCloseImporting: PropTypes.func.isRequired,
-    onNewSoundFromLibraryClick: PropTypes.func.isRequired,
-    onNewSoundFromRecordingClick: PropTypes.func.isRequired,
-    onRequestCloseSoundLibrary: PropTypes.func.isRequired,
-    onShowImporting: PropTypes.func.isRequired,
-    soundLibraryVisible: PropTypes.bool,
-    soundRecorderVisible: PropTypes.bool,
+EditorTab.propTypes = {
+    onActivateEditorTab: PropTypes.func.isRequired,
     sprites: PropTypes.shape({
         id: PropTypes.shape({
             sounds: PropTypes.arrayOf(PropTypes.shape({
@@ -90,31 +75,12 @@ SoundTab.propTypes = {
 };
 
 const mapStateToProps = state => ({
-    editingTarget: state.scratchGui.targets.editingTarget,
-    isRtl: state.locales.isRtl,
     sprites: state.scratchGui.targets.sprites,
     stage: state.scratchGui.targets.stage,
-    soundLibraryVisible: state.scratchGui.modals.soundLibrary,
-    soundRecorderVisible: state.scratchGui.modals.soundRecorder
 });
 
 const mapDispatchToProps = dispatch => ({
-    onActivateCostumesTab: () => dispatch(activateTab(COSTUMES_TAB_INDEX)),
-    onNewSoundFromLibraryClick: e => {
-        e.preventDefault();
-        dispatch(openSoundLibrary());
-    },
-    onNewSoundFromRecordingClick: () => {
-        dispatch(openSoundRecorder());
-    },
-    onRequestCloseSoundLibrary: () => {
-        dispatch(closeSoundLibrary());
-    },
-    dispatchUpdateRestore: restoreState => {
-        dispatch(setRestore(restoreState));
-    },
-    onCloseImporting: () => dispatch(closeAlertWithId('importingAsset')),
-    onShowImporting: () => dispatch(showStandardAlert('importingAsset'))
+    onActivateEditorTab: () => dispatch(activateTab(COSTUMES_TAB_INDEX)),
 });
 
 export default errorBoundaryHOC('Editor Tab')(
