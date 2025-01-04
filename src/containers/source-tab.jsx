@@ -91,8 +91,20 @@ class EditorTab extends React.Component {
                 dragType={DragConstants.COSTUME}
                 isRtl={isRtl}
             >
+                <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.css">
+                <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/codemirror.min.js"></script>
+                <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/6.65.7/mode/javascript/javascript.min.js"></script>
                 <div>
-                    Example
+                    <textarea id="txt-editor"></textarea>
+
+                    <script type="text/javascript">
+                        editor = CodeMirror.fromTextArea(document.getElementById("txt-editor"),
+                        {
+                            mode:"javascript",
+                            lineNumbers: true,　 // 行番号を表示する
+                            lineWrapping: true,　 // 行を折り返す
+                        });
+                    </script>
                 </div> 
             </AssetPanel>
         );
