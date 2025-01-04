@@ -56,12 +56,20 @@ class SourceTab extends React.Component {
             .catch((error) => {
                 console.error('Failed to load CodeMirror:', error);
             });
+
+        // ワークスペースの変更を監視するリスナーを追加
+        const { workspace } = this.props.vm;
+        workspace.addChangeListener(this.handleWorkspaceChange);
     }
 
     componentWillUnmount() {
         if (this.editor) {
             this.editor.toTextArea();
         }
+
+        // コンポーネントがアンマウントされるときにリスナーを削除
+        const { workspace } = this.props.vm;
+        workspace.removeChangeListener(this.handleWorkspaceChange);
     }
 
     componentDidUpdate(prevProps, prevState) {
@@ -112,6 +120,17 @@ class SourceTab extends React.Component {
                 [selectedSpriteId]: newCode
             }
         });
+    }
+
+    // ワークスペースの変更を監視するハンドラ
+    handleWorkspaceChange = () => {
+        const { workspace } = this.props.vm;
+        const blocks = workspace.getAllBlocks();
+        console.log('ワークスペースに変更がありました:', blocks);
+
+        // 変更があった場合、エディタに反映させる
+        const newCode = this.state.spriteCode[this.state.selectedSpriteId] || '';
+        this.editor.getDoc().setValue(newCode);
     }
 
     render() {
