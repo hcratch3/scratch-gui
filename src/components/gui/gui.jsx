@@ -41,7 +41,7 @@ import addExtensionIcon from './icon--extensions.svg';
 import codeIcon from './icon--code.svg';
 import costumesIcon from './icon--costumes.svg';
 import soundsIcon from './icon--sounds.svg';
-import editorIcon from './icon--editor.svg';
+import sourceIcon from './icon--source.svg';
 import DebugModal from '../debug-modal/debug-modal.jsx';
 
 const messages = defineMessages({
