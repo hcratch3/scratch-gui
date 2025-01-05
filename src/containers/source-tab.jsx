@@ -3,6 +3,7 @@ import PropTypes from 'prop-types';
 import bindAll from 'lodash.bindall';
 import { connect } from 'react-redux';
 
+import styles from '../components/source/source.css';
 import VM from 'scratch-vm';
 import { activateTab, SOURCE_TAB_INDEX } from '../reducers/editor-tab';
 import { setRestore } from '../reducers/restore-deletion';
@@ -120,8 +121,14 @@ class SourceTab extends React.Component {
         }
 
         return (
-            <div>
+            <div
+              className={styles.source}
+              ref={props.setRef}
+              onMouseDown={props.onContainerClick}
+            >
+              <div>
                 <div ref={this.editorRef} style={{ height: '100%', width: '100%' }} />
+              </div>
             </div>
         );
     }
@@ -131,6 +138,8 @@ SourceTab.propTypes = {
     editingTarget: PropTypes.string,
     sprites: PropTypes.object.isRequired,
     stage: PropTypes.object,
+    setRef: PropTypes.func,
+    onContainerClick: PropTypes.func.isRequired,
     vm: PropTypes.instanceOf(VM).isRequired
 };
 
