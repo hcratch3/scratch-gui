@@ -1,0 +1,9 @@
+@import "../../css/colors.css";
+@import "../../css/units.css";
+
+.source {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    padding: calc(2 * $space);
+}
