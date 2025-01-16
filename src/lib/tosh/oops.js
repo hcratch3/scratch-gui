@@ -1,4 +1,4 @@
-export var Oops = (function() {
+var Oops = (function() {
 
   // how to undo events that koel emits
 
@@ -174,3 +174,5 @@ export var Oops = (function() {
   return Oops;
 
 })();
+
+export default Oops;
