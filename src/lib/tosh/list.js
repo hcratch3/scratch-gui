@@ -1,4 +1,4 @@
-export var scratchCommands = [
+var scratchCommands = [
 
     ["move %n steps",						" ", 1, "forward:",					10],
     ["turn @turnRight %n degrees",			" ", 1, "turnRight:",				15],
@@ -134,3 +134,5 @@ export var scratchCommands = [
     ["length of %m.list",								"r", 12, "lineCountOfList:"],
     ["%m.list contains %s?",								"b", 12, "list:contains:"],
   ];
+
+export default scratchCommands;
