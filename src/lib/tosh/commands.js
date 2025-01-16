@@ -1,8 +1,6 @@
-export var Scratch = (function() {
+import scratchCommands from './scratchCommands.js';
 
-  
-
-
+var Scratch = (function() {
 
   /* define Scratch blocks */
 
@@ -111,3 +109,5 @@ export var Scratch = (function() {
   };
 
 }());
+
+export default Scratch;
