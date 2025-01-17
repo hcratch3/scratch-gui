@@ -1497,3 +1497,4 @@ var Language = (function(Earley) {
 
 }(Earley));
 
+export default Language;
