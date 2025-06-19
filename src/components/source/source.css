@@ -1,6 +1,5 @@
 @import "../../css/colors.css";
 @import "../../css/units.css";
-@import 'node_modules/@codemirror/view/dist/codemirror.css'; /* ★ CodeMirror 6 の基本スタイルをインポート */
 
 /* --- ここからあなたの既存のスタイル --- */
 .source {
