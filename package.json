@@ -44,7 +44,7 @@
     "@codemirror/history": "^0.19.2",      
     "@codemirror/matchbrackets": "^0.19.4",
     "@codemirror/closebrackets": "^0.19.2",
-    "@codemirror/comment": "^0.20.0",       
+    "@codemirror/comment": "^0.19.1",       
     "@codemirror/crosshair": "^0.20.0",     
     "@codemirror/dropcursor": "^0.20.0",    
     "@codemirror/gutter": "^0.19.9",         
