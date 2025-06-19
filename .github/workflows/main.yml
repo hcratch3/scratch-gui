@@ -1,0 +1,22 @@
+name: Trigger Remote Workflow on Push
+
+on:
+  push:
+    branches:
+      - main # ここで、どのブランチへのpushをトリガーにするか指定
+
+jobs:
+  trigger_remote:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get branch name
+        id: get_branch
+        run: echo "branch_name=${GITHUB_REF##*/}" >> $GITHUB_OUTPUT
+
+      - name: Dispatch remote workflow
+        uses: peter-evans/repository-dispatch@v3 # リポジトリディスパッチを簡単に実行するアクション
+        with:
+          token: ${{ secrets.PAT_FOR_REPO_B }} # ステップ3で作成するPAT
+          repository: hcratch3/hcratch3.github.io # トリガーしたいリポジトリの owner/repo を指定
+          event: change_scratch # トリガー先のワークフローで設定したイベントタイプ
+          client-payload: '{"target_branch": "${{ steps.get_branch.outputs.branch_name }}"}' # トリガー先に渡したい情報
