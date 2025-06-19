@@ -16,7 +16,7 @@ jobs:
       - name: Dispatch remote workflow
         uses: peter-evans/repository-dispatch@v3 # リポジトリディスパッチを簡単に実行するアクション
         with:
-          token: ${{ secrets.PAT_FOR_REPO_B }} # ステップ3で作成するPAT
+          token: ${{ secrets.SCRATCH3 }} # ステップ3で作成するPAT
           repository: hcratch3/hcratch3.github.io # トリガーしたいリポジトリの owner/repo を指定
           event: change_scratch # トリガー先のワークフローで設定したイベントタイプ
           client-payload: '{"target_branch": "${{ steps.get_branch.outputs.branch_name }}"}' # トリガー先に渡したい情報
