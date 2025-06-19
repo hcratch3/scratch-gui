@@ -23,8 +23,6 @@ import { lintKeymap, linter, Diagnostic } from '@codemirror/lint'; // Linting
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search'; // 検索・置換
 import { foldKeymap, foldGutter } from '@codemirror/fold'; // コードの折りたたみ
 import { rectangularSelection } from '@codemirror/rectangular-selection'; // 矩形選択
-import { crosshairCursor } from '@codemirror/crosshair'; // 十字カーソル（矩形選択などと併用）
-import { dropCursor } from '@codemirror/dropcursor'; // ドロップ時のカーソル表示
 
 // --- 言語固有の拡張機能 ---
 import { javascript } from '@codemirror/lang-javascript'; // JavaScript 言語モード
@@ -155,14 +153,12 @@ class SourceTab extends React.Component {
                 history(), // 変更履歴 (Undo/Redo)
                 foldGutter(), // コードの折りたたみガッター
                 drawSelection(), // 選択範囲の描画
-                dropCursor(), // ドロップ時のカーソル表示
                 EditorState.allowMultipleSelections.of(true), // 複数選択を許可
                 indentOnInput(), // 入力時の自動インデント
                 bracketMatching(), // 括弧のマッチング
                 closeBrackets(), // 括弧の自動閉じ
                 autocompletion(), // 自動補完
                 rectangularSelection(), // 矩形選択
-                crosshairCursor(), // 十字カーソル
                 highlightActiveLine(), // アクティブな行のハイライト
                 highlightSelectionMatches(), // 選択範囲と一致する単語をハイライト
 
