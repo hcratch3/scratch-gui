@@ -117,6 +117,8 @@ class SourceTab extends React.Component {
 
     // SourceTab.jsx の render メソッド
 
+    // SourceTab.jsx の render メソッド内
+
     render() {
         if (!this.props.vm.editingTarget) {
             return null;
@@ -124,11 +126,18 @@ class SourceTab extends React.Component {
 
         return (
             <div
-                className={styles.source}
-                ref={this.props.setRef} // ★ 修正: props -> this.props
-                onMouseDown={this.props.onContainerClick} // ★ 修正: props -> this.props
+                className={styles.source} // styles.source が flex-direction: column であると仮定
+                ref={this.props.setRef}
+                onMouseDown={this.props.onContainerClick}
             >
-                <div>
+                {/* ツールバーをここに配置 */}
+                <div className={styles.toolbar}>
+                    <button onClick={this.handleRunCode}>実行</button>
+                    <button onClick={this.handleSaveCode}>保存</button>
+                    {/* 必要に応じて他のボタンや要素を追加 */}
+                </div>
+                {/* エディター本体 */}
+                <div className={styles.editorContainer}> {/* 新しいラッパーを追加 */}
                     <div ref={this.editorRef} style={{ height: '100%', width: '100%' }} />
                 </div>
             </div>
