@@ -1,6 +1,8 @@
 @import "../../css/colors.css";
 @import "../../css/units.css";
+@import "~@codemirror/view/dist/codemirror.css"; /* ★ CodeMirror 6 の基本スタイルをインポート */
 
+/* --- ここからあなたの既存のスタイル --- */
 .source {
     display: flex;
     flex-direction: column; /* ツールバーとエディターを縦に並べる */
@@ -9,6 +11,9 @@
     width: 100%; /* 親要素から幅を継承 */
     box-sizing: border-box; /* paddingやborderをwidth/heightに含める */
     background-color: white;
+    border-top-right-radius: 0.5rem;
+    border-bottom-right-radius: 0.5rem;
+    border: 1px solid hsla(0, 0%, 0%, 0.15);
     padding: calc(2 * $space);
 }
 
@@ -38,7 +43,55 @@
 
 .editorContainer {
     flex-grow: 1; /* 残りのスペースを全て占める */
-    overflow: hidden; /* CodeMirrorのスクロールバーが表示されるように */
-    /* CodeMirrorは内部で overflow: hidden を持つ要素に配置されると正しく表示される */
-    overflow-y: scroll;
+    /* CodeMirror 6 は内部で自身をスクロールさせるため、
+       ここで直接 overflow-y: scroll; を設定すると、
+       CodeMirror自身のスクロールバーと二重になる可能性があります。
+       通常、CodeMirrorは親コンテナのサイズに合わせて、
+       自身の内部でスクロールバーを適切に処理します。
+       したがって、この行は削除するか、`overflow: hidden;` に戻すのが一般的です。
+    */
+    /* overflow-y: scroll;  ★ ここは削除または hidden に変更を検討 */
+    /* overflow-x: hidden;  ★ ここも同様に削除または hidden に変更を検討 */
 }
+
+/* ★ CodeMirror のエディター本体に適用されるスタイル */
+/* CodeMirror の DOM 構造は以下のようになることが多い:
+   <div class="cm-editor">
+     <div class="cm-scroller">
+       <div class="cm-lines"> ... </div>
+     </div>
+   </div>
+*/
+.cm-editor {
+    height: 100%; /* 親要素の editorContainer に合わせて高さを100%に */
+    width: 100%;  /* 親要素の editorContainer に合わせて幅を100%に */
+    /* CodeMirror のデフォルトの `border` を削除したい場合 */
+    /* border: none; */
+}
+
+/* CodeMirror のデフォルトで設定される最小高さを上書きしたい場合 */
+.cm-editor.cm-focused {
+  outline: none; /* フォーカス時のデフォルトのアウトラインを消す（任意）*/
+}
+.cm-scroller {
+    overflow: auto; /* CodeMirrorが内部でスクロールバーを管理するための設定 */
+}
+
+/* CodeMirror のデフォルトの背景色を上書きしたい場合 */
+.cm-editor .cm-scroller {
+    background-color: white; /* 例: 背景色を白に統一 */
+}
+
+/* CodeMirror の行番号の色やフォントを調整したい場合 */
+.cm-gutter {
+    background-color: #f8f8f8; /* ガッター（行番号部分）の背景色 */
+    color: #999; /* 行番号の文字色 */
+}
+
+/* シンタックスハイライトの色を調整したい場合（上級） */
+/* defaultHighlightStyle が提供するクラスを上書きするか、カスタムテーマを使用 */
+/*
+.cm-keyword { color: #0070c0; }
+.cm-string { color: #a31515; }
+.cm-variableName { color: #001080; }
+*/
