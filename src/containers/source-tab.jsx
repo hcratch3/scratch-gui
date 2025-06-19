@@ -38,7 +38,6 @@ import { EditorStateField } from '@codemirror/state';
 // CodeMirror 6 は npm からテーマをインポートすることが一般的です。
 // ここではCSSを直接インポートする例ですが、
 // @uiw/codemirror-theme-dracula のようなパッケージを使うこともできます。
-import '@codemirror/view/dist/codemirror.css';
 // デフォルトのハイライトスタイルが含まれるため、基本的にはこれだけでOK
 // もし独自のテーマを使う場合は、別途CSSをインポートするか、テーマ拡張を適用します。
 // 例: import { oneDark } from '@codemirror/theme-one-dark'; // npm install @codemirror/theme-one-dark
