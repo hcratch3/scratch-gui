@@ -11,7 +11,7 @@ import errorBoundaryHOC from '../lib/error-boundary-hoc.jsx';
 
 // --- CodeMirror 6 のコアおよび基本セットアップ関連 ---
 import { EditorState } from '@codemirror/state';
-import { EditorView, lineWrapping, highlightActiveLine } from '@codemirror/view';
+import { EditorView, lineWrapping, highlightActiveLine, highlightSpecialChars } from '@codemirror/view';
 import { defaultKeymap } from '@codemirror/commands'; // デフォルトのキーバインド
 import { history, historyKeymap } from '@codemirror/history'; // 変更履歴、Undo/Redo
 import { indentOnInput } from '@codemirror/language'; // 自動インデント
@@ -30,7 +30,6 @@ import { javascript } from '@codemirror/lang-javascript'; // JavaScript 言語�
 // --- その他のユーティリティ拡張機能 ---
 import { keymap } from '@codemirror/view'; // キーマップの適用
 import { drawSelection, highlightActiveLineGutter } from '@codemirror/view'; // 選択範囲の描画、アクティブ行のガッターハイライト
-import { highlightSpecialChars } from '@codemirror/highlight'; // 特殊文字（タブ、スペースなど）のハイライト
 import { lineNumbers } from '@codemirror/gutter'; // 行番号
 import { defaultHighlightStyle } from '@codemirror/highlight'; // デフォルトの構文ハイライトスタイル
 import { EditorStateField } from '@codemirror/state';
