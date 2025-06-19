@@ -3,7 +3,7 @@ name: Trigger Remote Workflow on Push
 on:
   push:
     branches:
-      - main # ここで、どのブランチへのpushをトリガーにするか指定
+      - develop # ここで、どのブランチへのpushをトリガーにするか指定
 
 jobs:
   trigger_remote:
