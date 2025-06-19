@@ -115,6 +115,8 @@ class SourceTab extends React.Component {
         });
     }
 
+    // SourceTab.jsx の render メソッド
+
     render() {
         if (!this.props.vm.editingTarget) {
             return null;
@@ -122,13 +124,13 @@ class SourceTab extends React.Component {
 
         return (
             <div
-              className={styles.source}
-              ref={props.setRef}
-              onMouseDown={props.onContainerClick}
+                className={styles.source}
+                ref={this.props.setRef} // ★ 修正: props -> this.props
+                onMouseDown={this.props.onContainerClick} // ★ 修正: props -> this.props
             >
-              <div>
-                <div ref={this.editorRef} style={{ height: '100%', width: '100%' }} />
-              </div>
+                <div>
+                    <div ref={this.editorRef} style={{ height: '100%', width: '100%' }} />
+                </div>
             </div>
         );
     }
