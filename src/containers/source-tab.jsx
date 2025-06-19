@@ -5,18 +5,19 @@ import { connect } from 'react-redux';
 
 import styles from '../components/source/source.css';
 import VM from 'scratch-vm';
-// ... activateTab, setRestore などは必要に応じて残す ...
 import errorBoundaryHOC from '../lib/error-boundary-hoc.jsx';
 
 // --- uiwjs/react-codemirror をインポート ---
 import CodeMirror from '@uiw/react-codemirror';
 
-// --- CodeMirror 6 のコアおよび基本セットアップ関連 ---
-// EditorState, EditorView の直接のインポートは不要になることが多い
-// ただし、特定の拡張機能内でこれらを使う場合は必要になる
-import { EditorState } from '@codemirror/state'; // 例えば myLinter で使う場合
-import { EditorView, highlightActiveLine, drawSelection, dropCursor, crosshairCursor } from '@codemirror/view'; // view 関連の拡張機能
-import { lineNumbers, highlightActiveLineGutter, foldGutter } from '@codemirror/gutter';
+// --- CodeMirror 6 の拡張機能をインポート (すべて ^6.x.x 系) ---
+// Note: @codemirror/fold は ^6.x.x 系が利用できないため、ここでは使用しません。
+//       もし将来的に利用可能になった場合、再度追加を検討してください。
+
+// コア:
+import { EditorState } from '@codemirror/state'; // リンターなどで使う可能性あり
+import { EditorView, highlightActiveLine, drawSelection, dropCursor, crosshairCursor, keymap } from '@codemirror/view';
+import { lineNumbers, highlightActiveLineGutter } from '@codemirror/gutter'; // foldGutter は削除
 import { history, historyKeymap } from '@codemirror/history';
 import { indentOnInput, defaultHighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { bracketMatching } from '@codemirror/matchbrackets';
@@ -25,17 +26,19 @@ import { autocompletion, completionKeymap } from '@codemirror/autocomplete';
 import { commentKeymap } from '@codemirror/comment';
 import { lintKeymap, linter, Diagnostic } from '@codemirror/lint';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
-import { foldKeymap } from '@codemirror/fold';
+// import { foldKeymap } from '@codemirror/fold'; // foldKeymap は削除
 import { rectangularSelection } from '@codemirror/rectangular-selection';
-import { keymap } from '@codemirror/view'; // キーマップの適用
-import { highlightSpecialChars } from '@codemirror/highlight'; // highlight からではなく、view からインポートすべき
+import { highlightSpecialChars } from '@codemirror/highlight'; // ハイライト関連
 
-// --- 言語固有の拡張機能 ---
+// コマンドのデフォルトキーマップ
+import { defaultKeymap } from '@codemirror/commands';
+
+// 言語固有の拡張機能:
 import { javascript } from '@codemirror/lang-javascript';
 
-// --- オプション: Vim/Emacs キーマップ (必要な場合のみ) ---
-// import { vim } from '@replit/codemirror-vim';
-// import { emacs } from '@codemirror/emacs';
+// テーマ (uiw/react-codemirror には様々なテーマがあります。必要であればインストールしてインポート)
+// 例: npm install @uiw/codemirror-theme-basic
+// import { basicLight } from '@uiw/codemirror-theme-basic';
 
 class SourceTab extends React.Component {
     constructor(props) {
@@ -45,8 +48,6 @@ class SourceTab extends React.Component {
             'handleRunCode',
             'handleSaveCode'
         ]);
-        // this.editorRef はもう必要ない
-        // this.editorView ももう直接管理しない
 
         this.state = {
             spriteCode: this.initializeSpriteCode(props.sprites, props.stage),
@@ -54,10 +55,9 @@ class SourceTab extends React.Component {
         };
     }
 
-    // componentDidMount でエディターを初期化する必要はもうない
-    // componentDidUpdate も、value を props/state から CodeMirror コンポーネントに渡すため、簡素化される
-
-    // componentWillUnmount も CodeMirror コンポーネントが内部で管理するため、基本的には不要
+    // React コンポーネントのライフサイクルメソッド。
+    // CodeMirror インスタンスの直接管理は @uiw/react-codemirror が行うため、
+    // componentDidMount や componentWillUnmount での複雑な処理は不要になりました。
 
     initializeSpriteCode(sprites, stage) {
         const codeMap = {};
@@ -70,22 +70,21 @@ class SourceTab extends React.Component {
         return codeMap;
     }
 
-    // handleCodeChange は CodeMirror コンポーネントの onChange プロパティに渡す
+    // CodeMirror コンポーネントの onChange イベントから新しいコードを受け取ります
     handleCodeChange = (newCode) => {
         const { selectedSpriteId, spriteCode } = this.state;
-
         this.setState({
             spriteCode: {
                 ...spriteCode,
                 [selectedSpriteId]: newCode
             }
         });
+        // 必要に応じて、ここで親コンポーネントにコードの変更を通知できます
+        // 例: this.props.onCodeChange(newCode);
     };
 
-    // runCode, saveCode は既存のまま
-
+    // runCode, saveCode は既存のロジックを維持します
     handleRunCode = () => {
-        // ... 既存のロジック ...
         const { vm } = this.props;
         const { selectedSpriteId, spriteCode } = this.state;
         const codeToRun = spriteCode[selectedSpriteId] || '';
@@ -98,6 +97,7 @@ class SourceTab extends React.Component {
         try {
             const target = vm.runtime.getTargetById(selectedSpriteId);
             if (target) {
+                // Scratch 互換 API を提供するオブジェクト
                 const Scratch = {
                     move: (steps) => {
                         vm.runtime.requestAddBlock({
@@ -122,6 +122,7 @@ class SourceTab extends React.Component {
                         if (variable) variable.value = value;
                     }
                 };
+                // ユーザーコードを関数として実行
                 const scriptFunction = new Function('Scratch', codeToRun);
                 scriptFunction(Scratch);
             } else {
@@ -136,7 +137,7 @@ class SourceTab extends React.Component {
     handleSaveCode = () => {
         const codeToSave = this.state.spriteCode[this.state.selectedSpriteId] || '';
         console.log('Saving code for sprite:', this.state.selectedSpriteId, codeToSave);
-        // 保存ロジック
+        // 保存ロジックをここに追加
     };
 
     render() {
@@ -146,72 +147,84 @@ class SourceTab extends React.Component {
 
         const currentCode = this.state.spriteCode[this.state.selectedSpriteId] || '';
 
-        // ★ カスタムリンターの例: 'hoge'という単語を警告
+        // カスタムリンターの定義例: "Scratch." の後に続く未定義の関数呼び出しを警告
         const myLinter = linter((view) => {
             let diagnostics = [];
             const doc = view.state.doc.toString();
-            const hogeRegex = /hoge/g;
+            const scratchCallRegex = /Scratch\.([a-zA-Z_][a-zA-Z0-9_]*)\s*\(/g; // () が続く関数呼び出しに限定
             let match;
-            while ((match = hogeRegex.exec(doc)) !== null) {
-                diagnostics.push({
-                    from: match.index,
-                    to: match.index + match[0].length,
-                    severity: 'warning',
-                    message: "'hoge' is a potentially problematic word here."
-                });
+            while ((match = scratchCallRegex.exec(doc)) !== null) {
+                const funcName = match[1];
+                // Scratch オブジェクトに存在する許可された関数リスト
+                const allowedScratchFunctions = [
+                    'move', 'say', 'setX', 'setY', 'changeX', 'changeY',
+                    'turnRight', 'turnLeft', 'getVar', 'setVar'
+                ];
+                if (!allowedScratchFunctions.includes(funcName)) {
+                    diagnostics.push({
+                        from: match.index + 'Scratch.'.length,
+                        to: match.index + match[0].length - 1, // '(' の直前まで
+                        severity: 'warning',
+                        message: `"${funcName}" is not a recognized Scratch function.`
+                    });
+                }
             }
             return diagnostics;
         });
 
+        // CodeMirror に渡す拡張機能のリスト
         const codeMirrorExtensions = [
-            // CodeMirror 6 の拡張機能をここにリストする
-            // basicSetup は使わないので、個々の機能を追加
+            // 基本機能:
             lineNumbers(),
             highlightActiveLineGutter(),
-            highlightSpecialChars(), // @codemirror/view から
+            highlightSpecialChars(), // @codemirror/highlight からではなく、@codemirror/view からインポート
             history(),
-            foldGutter(),
+            // foldGutter(), // @codemirror/fold が ^6.x.x 系で利用できないため削除
             drawSelection(),
-            dropCursor(), // @codemirror/view から
+            dropCursor(),
             EditorState.allowMultipleSelections.of(true),
             indentOnInput(),
             bracketMatching(),
             closeBrackets(),
-            autocompletion(),
             rectangularSelection(),
-            crosshairCursor(), // @codemirror/view から
+            crosshairCursor(),
             highlightActiveLine(),
             highlightSelectionMatches(),
-            
-            // デフォルトのシンタックスハイライトスタイルを適用
-            // defaultHighlightStyle.fallback, // uiw のテーマを使う場合は不要なこともある
 
+            // 言語固有のハイライトと構造:
             javascript(), // JavaScript 言語サポート
 
-            myLinter, // カスタムリンターの適用
+            // 自動補完 (JavaScript 言語のコンテキストで機能するように)
+            autocompletion(),
 
+            // カスタムリンター:
+            myLinter,
+
+            // キーマップの結合:
+            // defaultKeymap は @codemirror/commands から
+            // その他のキーマップはそれぞれの機能パッケージから
             keymap.of([
                 ...defaultKeymap,
                 ...searchKeymap,
                 ...historyKeymap,
-                ...foldKeymap,
+                // ...foldKeymap, // foldKeymap も削除
                 ...commentKeymap,
                 ...completionKeymap,
                 ...closeBracketsKeymap,
                 ...lintKeymap,
             ]),
 
-            // uiwjs/react-codemirror にはテーマを設定するプロパティがある
-            // 例: basicDark
-            // import { basicDark } from '@uiw/codemirror-theme-basic';
-            // basicDark
+            // uiw/react-codemirror が提供するテーマ（オプション）
+            // 例: basicLight (要インストール)
+            // basicLight
         ];
-
 
         return (
             <div
                 className={styles.source}
+                // setRef は props 経由で親コンポーネントが DOM 要素を参照するために必要
                 ref={this.props.setRef}
+                // onContainerClick も親コンポーネントからのイベントハンドラ
                 onMouseDown={this.props.onContainerClick}
             >
                 {/* ツールバー */}
@@ -222,12 +235,12 @@ class SourceTab extends React.Component {
                 {/* エディター本体 */}
                 <div className={styles.editorContainer}>
                     <CodeMirror
-                        value={currentCode}
-                        height="100%" // 親要素の `editorContainer` が `flex-grow: 1` で高さを占めるため、ここは `100%` に設定
-                        extensions={codeMirrorExtensions}
-                        onChange={this.handleCodeChange}
-                        // CodeMirror の他のオプションをプロパティとして渡す
-                        // 例: theme={basicDark}
+                        value={currentCode} // エディターの現在の内容を state から渡す
+                        height="100%"       // 親要素の高さに合わせる
+                        extensions={codeMirrorExtensions} // 適用する CodeMirror 拡張機能のリスト
+                        onChange={this.handleCodeChange} // コード変更時のコールバック
+                        // その他の CodeMirror オプション（例: theme）
+                        // theme={basicLight} // ここでテーマを適用
                     />
                 </div>
             </div>
@@ -239,8 +252,8 @@ SourceTab.propTypes = {
     editingTarget: PropTypes.string,
     sprites: PropTypes.object.isRequired,
     stage: PropTypes.object,
-    setRef: PropTypes.func,
-    onContainerClick: PropTypes.func.isRequired,
+    setRef: PropTypes.func, // 親コンポーネントから渡される DOM 参照用 prop
+    onContainerClick: PropTypes.func.isRequired, // 親コンポーネントから渡されるクリックハンドラ
     vm: PropTypes.instanceOf(VM).isRequired
 };
 
