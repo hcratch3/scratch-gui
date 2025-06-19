@@ -1,33 +1,30 @@
 @import "../../css/colors.css";
 @import "../../css/units.css";
+/* uiw/react-codemirror が内部でインポートしてくれる可能性もあるが、
+   念のため、CodeMirror の基本スタイルは明示的にインポートしておくのが安全 */
+/* @import '@codemirror/view/dist/codemirror.css'; */
 
-/* --- ここからあなたの既存のスタイル --- */
 .source {
     display: flex;
-    flex-direction: column; /* ツールバーとエディターを縦に並べる */
+    flex-direction: column;
     flex-grow: 1;
-    height: 100%; /* 親要素から高さを継承 */
-    width: 100%; /* 親要素から幅を継承 */
-    box-sizing: border-box; /* paddingやborderをwidth/heightに含める */
+    height: 100%;
+    width: 100%;
+    box-sizing: border-box;
     background-color: white;
-    border-top-right-radius: 0.5rem;
-    border-bottom-right-radius: 0.5rem;
-    border: 1px solid hsla(0, 0%, 0%, 0.15);
     padding: calc(2 * $space);
 }
 
 .toolbar {
-    /* ツールバーのスタイル */
     padding: 8px;
     background-color: #f0f0f0;
     border-bottom: 1px solid #ccc;
-    display: flex; /* ボタンを横に並べる */
-    gap: 8px; /* ボタン間のスペース */
+    display: flex;
+    gap: 8px;
     align-items: center;
 }
 
 .toolbar button {
-    /* ボタンの基本的なスタイル */
     padding: 6px 12px;
     border: 1px solid #bbb;
     border-radius: 4px;
@@ -42,55 +39,30 @@
 
 .editorContainer {
     flex-grow: 1; /* 残りのスペースを全て占める */
-    /* CodeMirror 6 は内部で自身をスクロールさせるため、
-       ここで直接 overflow-y: scroll; を設定すると、
-       CodeMirror自身のスクロールバーと二重になる可能性があります。
-       通常、CodeMirrorは親コンテナのサイズに合わせて、
-       自身の内部でスクロールバーを適切に処理します。
-       したがって、この行は削除するか、`overflow: hidden;` に戻すのが一般的です。
-    */
-    /* overflow-y: scroll;  ★ ここは削除または hidden に変更を検討 */
-    /* overflow-x: hidden;  ★ ここも同様に削除または hidden に変更を検討 */
+    /* CodeMirror (uiw/react-codemirror 経由) が内部でスクロールバーを管理するため、
+       ここでは overflow: hidden; にしておくのが最適です。
+       uiw/react-codemirror の height="100%" と連動して機能します。 */
+    overflow: hidden;
 }
 
-/* ★ CodeMirror のエディター本体に適用されるスタイル */
-/* CodeMirror の DOM 構造は以下のようになることが多い:
-   <div class="cm-editor">
-     <div class="cm-scroller">
-       <div class="cm-lines"> ... </div>
-     </div>
-   </div>
+/* uiw/react-codemirror は内部で CodeMirror のクラスを適用します。
+   直接 .cm-editor などを操作する必要は減りますが、もし必要ならここに追加します。
+   uiw のコンポーネントは、自動的に height と width を調整するはずです。
 */
 .cm-editor {
-    height: 100%; /* 親要素の editorContainer に合わせて高さを100%に */
-    width: 100%;  /* 親要素の editorContainer に合わせて幅を100%に */
-    /* CodeMirror のデフォルトの `border` を削除したい場合 */
+    /* uiw/react-codemirror が height="100%" を設定するので、
+       ここでは明示的に width: 100% などを設定する必要はほぼありません。
+       ただし、デフォルトのボーダーなどを消したい場合は必要です。
+    */
     /* border: none; */
 }
 
-/* CodeMirror のデフォルトで設定される最小高さを上書きしたい場合 */
-.cm-editor.cm-focused {
-  outline: none; /* フォーカス時のデフォルトのアウトラインを消す（任意）*/
-}
+/* その他の CodeMirror のスタイル調整はここに記述 */
 .cm-scroller {
-    overflow: auto; /* CodeMirrorが内部でスクロールバーを管理するための設定 */
+    background-color: white; /* エディターの背景色を明示的に指定 */
 }
 
-/* CodeMirror のデフォルトの背景色を上書きしたい場合 */
-.cm-editor .cm-scroller {
-    background-color: white; /* 例: 背景色を白に統一 */
-}
-
-/* CodeMirror の行番号の色やフォントを調整したい場合 */
 .cm-gutter {
-    background-color: #f8f8f8; /* ガッター（行番号部分）の背景色 */
+    background-color: #f8f8f8; /* 行番号ガッターの背景色 */
     color: #999; /* 行番号の文字色 */
 }
-
-/* シンタックスハイライトの色を調整したい場合（上級） */
-/* defaultHighlightStyle が提供するクラスを上書きするか、カスタムテーマを使用 */
-/*
-.cm-keyword { color: #0070c0; }
-.cm-string { color: #a31515; }
-.cm-variableName { color: #001080; }
-*/
