@@ -3,31 +3,20 @@ import PropTypes from 'prop-types';
 import { connect } from 'react-redux';
 
 // CodeMirror 6のモジュールを直接インポート
-// Webpackで適切にバンドルされることを想定しています
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, highlightActiveLine, lineNumbers } from "@codemirror/view";
 import { indentWithTab } from "@codemirror/commands";
 import { javascript } from "@codemirror/lang-javascript";
 import { oneDark } from "@codemirror/theme-one-dark";
-// basicSetup は codemirror パッケージに統合されている場合もありますが、
-// CDN版のように個別の拡張機能の組み合わせで対応する方が柔軟です。
-// 必要に応じて他の @codemirror/xxx 拡張機能をインポートしてください。
 import { history, undo, redo } from '@codemirror/commands'; // 履歴機能
 import { bracketMatching } from '@codemirror/language'; // ブラケットマッチング
+import { autocompletion, CompletionContext } from '@codemirror/autocomplete'; // 入力補助用に追加
 
 import styles from '../components/source/source.css'; // 既存のスタイルシート
 import VM from 'scratch-vm';
 import { activateTab, SOURCE_TAB_INDEX } from '../reducers/editor-tab';
 import { setRestore } from '../reducers/restore-deletion';
 import errorBoundaryHOC from '../lib/error-boundary-hoc.jsx';
-
-// CodeMirror 6のCSSを直接インポート（Webpackが処理する）
-// **この行は削除しました**
-// import '@codemirror/theme-one-dark/dist/index.css';
-// CodeMirrorの基本的なビューのスタイルは、
-// @codemirror/view/dist/editor.css のような形で提供されることがありますが、
-// CodeMirror 6はデフォルトでCSSをあまり持たず、テーマに任せる傾向があります。
-// 必要に応じて追加してください。
 
 const SourceTab = (props) => {
     const editorRef = useRef(null); // エディタをマウントするDOM要素への参照
@@ -48,15 +37,73 @@ const SourceTab = (props) => {
     // 現在選択されているスプライトのIDを状態として保持
     const [selectedSpriteId, setSelectedSpriteId] = useState(props.editingTarget);
 
+    // Scratchブロックに対応するカスタム補完項目を定義
+    // この関数がCodeMirrorに補完候補を提供します
+    const scratchCompletions = useCallback((context) => {
+        const word = context.matchBefore(/\w*/); // カーソル位置の単語をマッチ
+        if (!word.from || word.from === word.to && !context.explicit) {
+            // 単語の途中ではない、または明示的なトリガーではない場合は補完しない
+            return null;
+        }
+
+        // Scratchの一般的なブロックや関連するキーワードをここにリストアップ
+        const completions = [
+            { label: "move", type: "function", info: "スプライトを移動します (例: move(10) steps;)" },
+            { label: "turnRight", type: "function", info: "スプライトを右に回転します (例: turnRight(15) degrees;)" },
+            { label: "turnLeft", type: "function", info: "スプライトを左に回転します (例: turnLeft(15) degrees;)" },
+            { label: "say", type: "function", info: "スプライトが言います (例: say('Hello!');)" },
+            { label: "think", type: "function", info: "スプライトが考えます (例: think('Hmm...');)" },
+            { label: "whenGreenFlagClicked", type: "function", info: "緑の旗がクリックされたときに実行 (例: whenGreenFlagClicked(() => { ... });)" },
+            { label: "forever", type: "keyword", info: "繰り返しのループ (例: forever(() => { ... });)" },
+            { label: "if", type: "keyword", info: "条件分岐 (例: if (condition) { ... } else { ... };)" },
+            { label: "else", type: "keyword", info: "条件分岐 (ifと合わせて使用)" },
+            { label: "repeat", type: "function", info: "指定回数繰り返す (例: repeat(10, () => { ... });)" },
+            { label: "glide", type: "function", info: "指定位置へ滑らかに移動 (例: glide(1, x, y);)" },
+            { label: "goTo", type: "function", info: "指定位置へ移動 (例: goTo(x, y);)" },
+            { label: "changeXby", type: "function", info: "X座標を変更 (例: changeXby(10);)" },
+            { label: "changeYby", type: "function", info: "Y座標を変更 (例: changeYby(10);)" },
+            { label: "setXto", type: "function", info: "X座標を設定 (例: setXto(0);)" },
+            { label: "setYto", type: "function", info: "Y座標を設定 (例: setYto(0);)" },
+            { label: "show", type: "function", info: "表示する (例: show();)" },
+            { label: "hide", type: "function", info: "隠す (例: hide();)" },
+            { label: "nextCostume", type: "function", info: "次のコスチューム (例: nextCostume();)" },
+            { label: "switchCostumeTo", type: "function", info: "コスチュームを切り替える (例: switchCostumeTo('costume1');)" },
+            { label: "wait", type: "function", info: "待つ (例: wait(1) seconds;)" },
+            { label: "broadcast", type: "function", info: "メッセージを送る (例: broadcast('message1');)" },
+            { label: "whenIReceive", type: "function", info: "メッセージを受け取ったとき (例: whenIReceive('message1', () => { ... });)" },
+            { label: "setVariable", type: "function", info: "変数を設定する (例: setVariable('myVar', 0);)" },
+            { label: "changeVariableBy", type: "function", info: "変数を変更する (例: changeVariableBy('myVar', 1);)" },
+            { label: "sprite", type: "keyword", info: "スプライト定義の開始" },
+            { label: "stage", type: "keyword", info: "ステージ定義の開始" },
+            { label: "clone", type: "function", info: "クローンを作成" },
+            { label: "deleteThisClone", type: "function", info: "このクローンを削除" },
+            { label: "touching", type: "function", info: "タッチ判定 (例: touching('mouse-pointer');)" },
+            { label: "distanceTo", type: "function", info: "距離を測定 (例: distanceTo('sprite1');)" },
+            { label: "ask", type: "function", info: "質問する (例: ask('What's your name?');)" },
+            { label: "answer", type: "variable", info: "質問の答え" },
+            { label: "random", type: "function", info: "乱数を生成 (例: random(1, 10);)" },
+            // 必要に応じてさらにScratchブロックに対応するキーワードや関数を追加
+        ];
+
+        // 単語のプレフィックスにマッチする項目をフィルタリング
+        const filteredCompletions = completions.filter(item =>
+            item.label.toLowerCase().startsWith(word.text.toLowerCase()) // 大文字小文字を区別しない検索
+        );
+
+        return {
+            from: word.from,
+            options: filteredCompletions
+        };
+    }, []); // 依存配列が空なので、この関数は一度だけ作成される
+
+
     // エディタの初期化とクリーンアップ
     useEffect(() => {
         const initializeEditor = () => {
             if (!editorRef.current) {
-                // エディタをマウントする要素がない場合は何もしない
                 return;
             }
 
-            // エディタの初期コンテンツ
             const initialDoc = spriteCode[selectedSpriteId] || '';
 
             // エディタの拡張機能の定義
@@ -65,14 +112,17 @@ const SourceTab = (props) => {
                 history(),              // 履歴
                 bracketMatching(),      // ブラケットマッチング
                 highlightActiveLine(),  // アクティブな行のハイライト
-                javascript(),           // JavaScript言語サポート
+                // JavaScript言語サポートをベースとして使用
+                // ここで、必要に応じてカスタム言語拡張をプラグインすることができます
+                javascript(),
+                // カスタム入力補助を自動補完に追加
+                autocompletion({ override: [scratchCompletions] }),
                 keymap.of([
                     indentWithTab,      // Tabキーでのインデント
-                    // その他のキーマップ（例: Ctrl+Zでundo, Ctrl+Shift+Zでredo）
-                    { key: "Mod-z", run: undo },
-                    { key: "Mod-Shift-z", run: redo }
+                    { key: "Mod-z", run: undo },       // Undo
+                    { key: "Mod-Shift-z", run: redo }  // Redo
                 ]),
-                oneDark, // ダークテーマ (これ自体がスタイルを適用します)
+                oneDark, // ダークテーマ
                 EditorView.lineWrapping, // 行の折り返し
                 EditorView.updateListener.of((update) => {
                     // エディタの内容が変更されたときのコールバック
@@ -101,11 +151,9 @@ const SourceTab = (props) => {
         };
 
         // editorInstance.current が null の場合のみ初期化を実行
-        // これにより、コンポーネントが再レンダリングされてもエディタが再初期化されるのを防ぐ
         if (!editorInstance.current) {
             initializeEditor();
         }
-
 
         // クリーンアップ関数: コンポーネントがアンマウントされるときにエディタを破棄
         return () => {
@@ -115,15 +163,14 @@ const SourceTab = (props) => {
                 editorInstance.current = null;
             }
         };
-    }, []); // 依存配列が空なので、コンポーネントマウント時に一度だけ実行
+    }, [selectedSpriteId, spriteCode, scratchCompletions]); // scratchCompletions も依存に含める
 
-    // コード変更ハンドラをuseCallbackでメモ化
     const handleCodeChange = useCallback((newCode) => {
         setSpriteCode(prevCodeMap => ({
             ...prevCodeMap,
             [selectedSpriteId]: newCode
         }));
-    }, [selectedSpriteId]); // selectedSpriteIdが変わったら再生成
+    }, [selectedSpriteId]);
 
     // props.editingTarget が変更されたときの処理
     useEffect(() => {
@@ -141,7 +188,6 @@ const SourceTab = (props) => {
 
         const newCode = spriteCode[selectedSpriteId] || '';
         // 現在のエディタのドキュメントと新しいコードが異なる場合のみ更新
-        // 無駄な dispatch を避けるため
         if (editorInstance.current.state.doc.toString() !== newCode) {
             editorInstance.current.dispatch({
                 changes: {
@@ -149,15 +195,12 @@ const SourceTab = (props) => {
                     to: editorInstance.current.state.doc.length,
                     insert: newCode
                 },
-                // エディタを更新する際に、Undo履歴に追加しないようにすることも可能
-                // userEvent: "replace"
             });
             console.log(`エディタの内容をスプライトID ${selectedSpriteId} のコードで更新しました。`);
         }
-    }, [selectedSpriteId, spriteCode]); // spriteCode も依存に含める
+    }, [selectedSpriteId, spriteCode]);
 
     // props.sprites または props.stage の変更を監視し、spriteCode を更新
-    // スプライトが追加/削除された場合にコードマップを更新する
     useEffect(() => {
         const newCodeMap = {};
         let changed = false;
@@ -188,7 +231,7 @@ const SourceTab = (props) => {
             setSpriteCode(newCodeMap);
             console.log("スプライトリストが変更されました。コードマップを更新しました。");
         }
-    }, [props.sprites, props.stage, spriteCode]); // spriteCode も依存に含めることで、新しいオブジェクト参照時に更新
+    }, [props.sprites, props.stage, spriteCode]);
 
     if (!props.vm.editingTarget) {
         return null;
@@ -201,7 +244,6 @@ const SourceTab = (props) => {
             onMouseDown={props.onContainerClick}
         >
             <div style={{ height: '100%', width: '100%' }}>
-                {/* CodeMirrorエディタをマウントする場所 */}
                 <div ref={editorRef} className="codemirror-container" style={{ height: '100%', width: '100%' }} />
             </div>
         </div>
