@@ -2,49 +2,32 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import { connect } from 'react-redux';
 
-import styles from '../components/source/source.css'; // このスタイルは既存のものをそのまま利用
+// CodeMirror 6のモジュールを直接インポート
+// Webpackで適切にバンドルされることを想定しています
+import { EditorState } from "@codemirror/state";
+import { EditorView, keymap, highlightActiveLine, lineNumbers } from "@codemirror/view";
+import { indentWithTab } from "@codemirror/commands";
+import { javascript } from "@codemirror/lang-javascript";
+import { oneDark } from "@codemirror/theme-one-dark";
+// basicSetup は codemirror パッケージに統合されている場合もありますが、
+// CDN版のように個別の拡張機能の組み合わせで対応する方が柔軟です。
+// 必要に応じて他の @codemirror/xxx 拡張機能をインポートしてください。
+import { history, undo, redo } from '@codemirror/commands'; // 履歴機能
+import { bracketMatching } from '@codemirror/language'; // ブラケットマッチング
+
+import styles from '../components/source/source.css'; // 既存のスタイルシート
 import VM from 'scratch-vm';
-import { activateTab, SOURCE_TAB_INDEX } from '../reducers/editor-tab'; // 必要に応じて維持
-import { setRestore } from '../reducers/restore-deletion'; // 必要に応じて維持
-import errorBoundaryHOC from '../lib/error-boundary-hoc.jsx'; // 必要に応じて維持
+import { activateTab, SOURCE_TAB_INDEX } from '../reducers/editor-tab';
+import { setRestore } from '../reducers/restore-deletion';
+import errorBoundaryHOC from '../lib/error-boundary-hoc.jsx';
 
-// CodeMirror 6のモジュールをCDNから動的にインポートするためのヘルパー関数
-// 通常はnpmでインストールし、バンドラーで処理しますが、ここではCDN利用の例として示します。
-const loadCodeMirror6Modules = async () => {
-    // CodeMirror 6のコアモジュール
-    const { EditorState } = await import("https://cdn.jsdelivr.net/npm/@codemirror/state@6.4.1/+esm");
-    const { EditorView, keymap, highlightActiveLine } = await import("https://cdn.jsdelivr.net/npm/@codemirror/view@6.26.0/+esm");
-
-    // 基本的なセットアップ（履歴、キーマップ、行番号など）
-    // @codemirror/basic-setupは古いバージョンのCodeMirror 6のパッケージ名。
-    // 現在は codemirror パッケージに統合されているため、直接 codemirror をインポートする
-    // ただし、npmを使用しない場合、basicSetupは個別の拡張機能の組み合わせとなることが多い
-    // ここでは、一般的な拡張機能を個別にインポートする形にする
-    const { indentWithTab } = await import("https://cdn.jsdelivr.net/npm/@codemirror/commands@6.3.3/+esm");
-
-    // 言語サポート
-    const { javascript } = await import("https://cdn.jsdelivr.net/npm/@codemirror/lang-javascript@6.2.1/+esm");
-
-    // テーマ (例: oneDark)
-    const { oneDark } = await import("https://cdn.jsdelivr.net/npm/@codemirror/theme-one-dark@6.1.2/+esm");
-    // CodeMirrorのデフォルトスタイルもインポートする必要があります。
-    // これらは通常、CSSファイルとして提供されるため、<link>タグでロードします。
-    // CodeMirror 6にはデフォルトのテーマがないため、別途テーマをインポートするか、
-    // 独自のスタイルを定義する必要があります。ここでは `oneDark` を使用。
-    // CodeMirrorの基本ビューのスタイルは、JavaScriptで動的に追加するか、
-    // 直接CSSを読み込む必要があります。
-
-    return {
-        EditorState,
-        EditorView,
-        keymap,
-        highlightActiveLine,
-        indentWithTab,
-        javascript,
-        oneDark,
-        // ここにさらに必要な拡張機能を追加
-    };
-};
+// CodeMirror 6のCSSを直接インポート（Webpackが処理する）
+// これにより、動的な<link>タグの追加は不要になります
+import '@codemirror/theme-one-dark/dist/index.css';
+// CodeMirrorの基本的なビューのスタイルは、
+// @codemirror/view/dist/editor.css のような形で提供されることがありますが、
+// CodeMirror 6はデフォルトでCSSをあまり持たず、テーマに任せる傾向があります。
+// 必要に応じて追加してください。
 
 const SourceTab = (props) => {
     const editorRef = useRef(null); // エディタをマウントするDOM要素への参照
@@ -65,98 +48,74 @@ const SourceTab = (props) => {
     // 現在選択されているスプライトのIDを状態として保持
     const [selectedSpriteId, setSelectedSpriteId] = useState(props.editingTarget);
 
-    // CodeMirror 6の基本的なスタイルを動的に追加
-    useEffect(() => {
-        // CodeMirror 6はデフォルトのCSSファイルを持たないため、
-        // テーマや言語拡張が提供するCSSをロードする必要があります。
-        // ここでは、oneDarkテーマのCSSをロードする例を示します。
-        // EditorViewの基本的なスタイルも必要であれば追加します。
-        const loadStyle = (href) => {
-            return new Promise((resolve, reject) => {
-                const link = document.createElement('link');
-                link.rel = 'stylesheet';
-                link.href = href;
-                link.onload = resolve;
-                link.onerror = reject;
-                document.head.appendChild(link);
-            });
-        };
-
-        // oneDarkテーマのCSSをロード
-        loadStyle('https://cdn.jsdelivr.net/npm/@codemirror/theme-one-dark@6.1.2/dist/index.css')
-            .catch(error => console.error('Failed to load CodeMirror theme CSS:', error));
-
-        // CodeMirrorの基本ビューのスタイル（必要に応じて）
-        // CodeMirror 6はデフォルトで最小限のスタイルしか提供しません。
-        // 特定のコンポーネント（例: 行番号）のスタイルが必要な場合は、
-        // 関連するパッケージのCSSを読み込むか、自分で定義する必要があります。
-        // 例: loadStyle('https://cdn.jsdelivr.net/npm/@codemirror/view@6.26.0/dist/editor.css');
-    }, []);
-
-
     // エディタの初期化とクリーンアップ
     useEffect(() => {
-        const initializeEditor = async () => {
-            try {
-                // CodeMirror 6のモジュールを動的にロード
-                const cm = await loadCodeMirror6Modules();
-
-                // エディタの初期コンテンツ
-                const initialDoc = spriteCode[selectedSpriteId] || '';
-
-                // エディタの拡張機能の定義
-                const extensions = [
-                    cm.javascript(), // JavaScript言語サポート
-                    cm.keymap.of([cm.indentWithTab]), // Tabキーでのインデント
-                    cm.highlightActiveLine(), // アクティブな行のハイライト
-                    cm.oneDark, // ダークテーマ
-                    // basicSetupの個別の拡張機能（必要に応じて追加）
-                    // cm.lineNumbers(), // 行番号
-                    // cm.history(), // 履歴
-                    // cm.undoRedo(), // アンドゥ/リドゥ
-                    // cm.syntaxHighlighting(), // シンタックスハイライト（言語拡張に含まれるが明示的に追加することも）
-                    cm.EditorView.lineWrapping, // 行の折り返し
-                    cm.EditorView.updateListener.of((update) => {
-                        // エディタの内容が変更されたときのコールバック
-                        if (update.docChanged) {
-                            handleCodeChange(update.state.doc.toString());
-                        }
-                    })
-                ];
-
-                // エディタの状態を作成
-                const startState = cm.EditorState.create({
-                    doc: initialDoc,
-                    extensions: extensions
-                });
-
-                // エディタのビューを作成し、DOM要素にマウント
-                const view = new cm.EditorView({
-                    state: startState,
-                    parent: editorRef.current
-                });
-
-                // editorInstance refにエディタインスタンスを保存
-                editorInstance.current = view;
-
-            } catch (error) {
-                console.error('Failed to initialize CodeMirror 6:', error);
+        const initializeEditor = () => {
+            if (!editorRef.current) {
+                // エディタをマウントする要素がない場合は何もしない
+                return;
             }
+
+            // エディタの初期コンテンツ
+            const initialDoc = spriteCode[selectedSpriteId] || '';
+
+            // エディタの拡張機能の定義
+            const extensions = [
+                lineNumbers(),          // 行番号
+                history(),              // 履歴
+                bracketMatching(),      // ブラケットマッチング
+                highlightActiveLine(),  // アクティブな行のハイライト
+                javascript(),           // JavaScript言語サポート
+                keymap.of([
+                    indentWithTab,      // Tabキーでのインデント
+                    // その他のキーマップ（例: Ctrl+Zでundo, Ctrl+Shift+Zでredo）
+                    { key: "Mod-z", run: undo },
+                    { key: "Mod-Shift-z", run: redo }
+                ]),
+                oneDark, // ダークテーマ
+                EditorView.lineWrapping, // 行の折り返し
+                EditorView.updateListener.of((update) => {
+                    // エディタの内容が変更されたときのコールバック
+                    if (update.docChanged) {
+                        handleCodeChange(update.state.doc.toString());
+                    }
+                })
+            ];
+
+            // エディタの状態を作成
+            const startState = EditorState.create({
+                doc: initialDoc,
+                extensions: extensions
+            });
+
+            // エディタのビューを作成し、DOM要素にマウント
+            const view = new EditorView({
+                state: startState,
+                parent: editorRef.current
+            });
+
+            // editorInstance refにエディタインスタンスを保存
+            editorInstance.current = view;
+
+            console.log("CodeMirror 6 エディターが初期化されました。");
         };
 
-        if (editorRef.current && !editorInstance.current) {
+        // editorInstance.current が null の場合のみ初期化を実行
+        // これにより、コンポーネントが再レンダリングされてもエディタが再初期化されるのを防ぐ
+        if (!editorInstance.current) {
             initializeEditor();
         }
+
 
         // クリーンアップ関数: コンポーネントがアンマウントされるときにエディタを破棄
         return () => {
             if (editorInstance.current) {
+                console.log("CodeMirror 6 エディターを破棄します。");
                 editorInstance.current.destroy();
                 editorInstance.current = null;
             }
         };
     }, []); // 依存配列が空なので、コンポーネントマウント時に一度だけ実行
-
 
     // コード変更ハンドラをuseCallbackでメモ化
     const handleCodeChange = useCallback((newCode) => {
@@ -166,47 +125,70 @@ const SourceTab = (props) => {
         }));
     }, [selectedSpriteId]); // selectedSpriteIdが変わったら再生成
 
-
-    // selectedSpriteId または editingTarget が変更されたときの処理
+    // props.editingTarget が変更されたときの処理
     useEffect(() => {
         if (props.editingTarget !== selectedSpriteId) {
             setSelectedSpriteId(props.editingTarget);
         }
     }, [props.editingTarget, selectedSpriteId]);
 
+    // selectedSpriteId または spriteCode が変更され、かつエディタがロード済みの場合
     useEffect(() => {
-        // selectedSpriteId が変更され、かつエディタがロード済みの場合
-        if (editorInstance.current && selectedSpriteId) {
-            const newCode = spriteCode[selectedSpriteId] || '';
-            // エディタの値を更新
+        // editorInstance.current が null の場合（まだ初期化されていない場合）は処理をスキップ
+        if (!editorInstance.current || !selectedSpriteId) {
+            return;
+        }
+
+        const newCode = spriteCode[selectedSpriteId] || '';
+        // 現在のエディタのドキュメントと新しいコードが異なる場合のみ更新
+        // 無駄な dispatch を避けるため
+        if (editorInstance.current.state.doc.toString() !== newCode) {
             editorInstance.current.dispatch({
                 changes: {
                     from: 0,
                     to: editorInstance.current.state.doc.length,
                     insert: newCode
-                }
+                },
+                // エディタを更新する際に、Undo履歴に追加しないようにすることも可能
+                // userEvent: "replace"
             });
+            console.log(`エディタの内容をスプライトID ${selectedSpriteId} のコードで更新しました。`);
         }
     }, [selectedSpriteId, spriteCode]); // spriteCode も依存に含める
 
     // props.sprites または props.stage の変更を監視し、spriteCode を更新
+    // スプライトが追加/削除された場合にコードマップを更新する
     useEffect(() => {
         const newCodeMap = {};
+        let changed = false;
+
+        // 既存のスプライトのコードを保持または初期化
         Object.keys(props.sprites).forEach((spriteId) => {
-            newCodeMap[spriteId] = spriteCode[spriteId] || ''; // 既存のコードを保持
+            if (!(spriteId in spriteCode)) {
+                changed = true;
+            }
+            newCodeMap[spriteId] = spriteCode[spriteId] || '';
         });
         if (props.stage) {
-            newCodeMap[props.stage.id] = spriteCode[props.stage.id] || ''; // 既存のコードを保持
+            if (!(props.stage.id in spriteCode)) {
+                changed = true;
+            }
+            newCodeMap[props.stage.id] = spriteCode[props.stage.id] || '';
         }
-        // 古いスプライトのコードを削除 (オプション)
+
+        // 存在しないスプライトのコードを削除
         for (const id in spriteCode) {
             if (!(id in newCodeMap)) {
                 delete spriteCode[id];
+                changed = true;
             }
         }
-        setSpriteCode(newCodeMap);
-    }, [props.sprites, props.stage]);
 
+        if (changed || Object.keys(newCodeMap).length !== Object.keys(spriteCode).length) {
+            setSpriteCode(newCodeMap);
+            console.log("スプライトリストが変更されました。コードマップを更新しました。");
+        }
+    }, [props.sprites, props.stage, spriteCode]); // spriteCode も依存に含めることで、新しいオブジェクト参照時に更新
 
     if (!props.vm.editingTarget) {
         return null;
