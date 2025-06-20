@@ -22,8 +22,8 @@ import { setRestore } from '../reducers/restore-deletion';
 import errorBoundaryHOC from '../lib/error-boundary-hoc.jsx';
 
 // CodeMirror 6のCSSを直接インポート（Webpackが処理する）
-// これにより、動的な<link>タグの追加は不要になります
-import '@codemirror/theme-one-dark/dist/index.css';
+// **この行は削除しました**
+// import '@codemirror/theme-one-dark/dist/index.css';
 // CodeMirrorの基本的なビューのスタイルは、
 // @codemirror/view/dist/editor.css のような形で提供されることがありますが、
 // CodeMirror 6はデフォルトでCSSをあまり持たず、テーマに任せる傾向があります。
@@ -72,7 +72,7 @@ const SourceTab = (props) => {
                     { key: "Mod-z", run: undo },
                     { key: "Mod-Shift-z", run: redo }
                 ]),
-                oneDark, // ダークテーマ
+                oneDark, // ダークテーマ (これ自体がスタイルを適用します)
                 EditorView.lineWrapping, // 行の折り返し
                 EditorView.updateListener.of((update) => {
                     // エディタの内容が変更されたときのコールバック
