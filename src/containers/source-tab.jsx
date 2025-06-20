@@ -106,13 +106,15 @@ const SourceTab = (props) => {
     }, []);
 
 
+    // エディタの初期化とクリーンアップ (コンポーネントマウント時に一度だけ実行)
     useEffect(() => {
         const initializeEditor = () => {
             if (!editorRef.current) {
                 return;
             }
 
-            const initialDoc = spriteCode[selectedSpriteId] || '';
+            // エディタの初期コンテンツは空文字列にする (後続のuseEffectで実際のコードをセット)
+            const initialDoc = ''; 
 
             // 提示された多機能な拡張機能を統合
             const extensions = [
@@ -182,7 +184,8 @@ const SourceTab = (props) => {
                 editorInstance.current = null;
             }
         };
-    }, [selectedSpriteId, spriteCode, scratchCompletions]); // 依存配列にscratchCompletionsを含める
+    }, [scratchCompletions]); // 依存配列からselectedSpriteIdとspriteCodeを削除し、scratchCompletionsのみを維持
+                               // (scratchCompletionsはuseCallbackでメモ化されているため実質は空配列と同様)
 
     const handleCodeChange = useCallback((newCode) => {
         setSpriteCode(prevCodeMap => ({
@@ -191,18 +194,22 @@ const SourceTab = (props) => {
         }));
     }, [selectedSpriteId]);
 
+    // selectedSpriteId の変更を監視 (propsからstateへの同期)
     useEffect(() => {
         if (props.editingTarget !== selectedSpriteId) {
             setSelectedSpriteId(props.editingTarget);
         }
     }, [props.editingTarget, selectedSpriteId]);
 
+    // selectedSpriteId または spriteCode が変更されたときにエディタの内容を更新
     useEffect(() => {
+        // editorInstance.current が null の場合（まだ初期化されていない場合）は処理をスキップ
         if (!editorInstance.current || !selectedSpriteId) {
             return;
         }
 
         const newCode = spriteCode[selectedSpriteId] || '';
+        // 現在のエディタのドキュメントと新しいコードが異なる場合のみ更新
         if (editorInstance.current.state.doc.toString() !== newCode) {
             editorInstance.current.dispatch({
                 changes: {
@@ -210,11 +217,14 @@ const SourceTab = (props) => {
                     to: editorInstance.current.state.doc.length,
                     insert: newCode
                 },
+                // エディタを更新する際に、Undo履歴に追加しないようにすることも可能
+                // userEvent: "replace"
             });
             console.log(`エディタの内容をスプライトID ${selectedSpriteId} のコードで更新しました。`);
         }
-    }, [selectedSpriteId, spriteCode]);
+    }, [selectedSpriteId, spriteCode]); // spriteCode も依存に含める
 
+    // props.sprites または props.stage の変更を監視し、spriteCode を更新
     useEffect(() => {
         const newCodeMap = {};
         let changed = false;
