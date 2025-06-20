@@ -3,7 +3,7 @@ import PropTypes from 'prop-types';
 import { connect } from 'react-redux';
 
 // CodeMirror 6のモジュールを直接インポート
-import { Extension, EditorState } from "@codemirror/state"; // Extensionを追加
+import { Extension, EditorState } from "@codemirror/state";
 import {
   EditorView, keymap, highlightSpecialChars, drawSelection,
   highlightActiveLine, dropCursor, rectangularSelection,
@@ -14,16 +14,17 @@ import {
   bracketMatching, foldGutter, foldKeymap
 } from "@codemirror/language";
 import {
-  defaultKeymap, history, historyKeymap
+  defaultKeymap, history, historyKeymap, undo, redo,
+  copySelected, cutSelected // コピー、カットコマンドを追加
 } from "@codemirror/commands";
 import {
-  searchKeymap, highlightSelectionMatches
+  searchKeymap, highlightSelectionMatches, startSearch // 検索コマンドを追加
 } from "@codemirror/search";
 import {
   autocompletion, completionKeymap, closeBrackets,
   closeBracketsKeymap
 } from "@codemirror/autocomplete";
-import {lintKeymap} from "@codemirror/lint"; // リンター関連
+import {lintKeymap} from "@codemirror/lint";
 
 import { javascript } from "@codemirror/lang-javascript";
 import { oneDark } from "@codemirror/theme-one-dark";
@@ -51,6 +52,36 @@ const SourceTab = (props) => {
 
     const [selectedSpriteId, setSelectedSpriteId] = useState(props.editingTarget);
 
+    // カスタムコマンドを保存するステート
+    const [customCommands, setCustomCommands] = useState([]);
+
+    // `command.json` からカスタムコマンドをロードするuseEffect
+    useEffect(() => {
+        const loadCustomCommands = async () => {
+            try {
+                const response = await fetch('../components/source/command.json');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                // データの形式がCodeMirrorの補完形式に合うように変換
+                const formattedCommands = data.commands.map(cmd => ({
+                    label: cmd.label,
+                    type: cmd.type || "keyword", // デフォルトはkeyword
+                    info: cmd.info || ""
+                }));
+                setCustomCommands(formattedCommands);
+                console.log('カスタムコマンドをロードしました:', formattedCommands);
+            } catch (error) {
+                console.error('カスタムコマンドのロードに失敗しました:', error);
+                // エラー時は空の配列を設定し、アプリケーションの動作を継続
+                setCustomCommands([]);
+            }
+        };
+
+        loadCustomCommands();
+    }, []); // コンポーネントマウント時に一度だけ実行
+
     // Scratchブロックに対応するカスタム補完項目を定義 (再利用)
     const scratchCompletions = useCallback((context) => {
         const word = context.matchBefore(/\w*/);
@@ -58,44 +89,10 @@ const SourceTab = (props) => {
             return null;
         }
 
-        const completions = [
-            { label: "move", type: "function", info: "スプライトを移動します (例: move(10) steps;)" },
-            { label: "turnRight", type: "function", info: "スプライトを右に回転します (例: turnRight(15) degrees;)" },
-            { label: "turnLeft", type: "function", info: "スプライトを左に回転します (例: turnLeft(15) degrees;)" },
-            { label: "say", type: "function", info: "スプライトが言います (例: say('Hello!');)" },
-            { label: "think", type: "function", info: "スプライトが考えます (例: think('Hmm...');)" },
-            { label: "whenGreenFlagClicked", type: "function", info: "緑の旗がクリックされたときに実行 (例: whenGreenFlagClicked(() => { ... });)" },
-            { label: "forever", type: "keyword", info: "繰り返しのループ (例: forever(() => { ... });)" },
-            { label: "if", type: "keyword", info: "条件分岐 (例: if (condition) { ... } else { ... };)" },
-            { label: "else", type: "keyword", info: "条件分岐 (ifと合わせて使用)" },
-            { label: "repeat", type: "function", info: "指定回数繰り返す (例: repeat(10, () => { ... });)" },
-            { label: "glide", type: "function", info: "指定位置へ滑らかに移動 (例: glide(1, x, y);)" },
-            { label: "goTo", type: "function", info: "指定位置へ移動 (例: goTo(x, y);)" },
-            { label: "changeXby", type: "function", info: "X座標を変更 (例: changeXby(10);)" },
-            { label: "changeYby", type: "function", info: "Y座標を変更 (例: changeYby(10);)" },
-            { label: "setXto", type: "function", info: "X座標を設定 (例: setXto(0);)" },
-            { label: "setYto", type: "function", info: "Y座標を設定 (例: setYto(0);)" },
-            { label: "show", type: "function", info: "表示する (例: show();)" },
-            { label: "hide", type: "function", info: "隠す (例: hide();)" },
-            { label: "nextCostume", type: "function", info: "次のコスチューム (例: nextCostume();)" },
-            { label: "switchCostumeTo", type: "function", info: "コスチュームを切り替える (例: switchCostumeTo('costume1');)" },
-            { label: "wait", type: "function", info: "待つ (例: wait(1) seconds;)" },
-            { label: "broadcast", type: "function", info: "メッセージを送る (例: broadcast('message1');)" },
-            { label: "whenIReceive", type: "function", info: "メッセージを受け取ったとき (例: whenIReceive('message1', () => { ... });)" },
-            { label: "setVariable", type: "function", info: "変数を設定する (例: setVariable('myVar', 0);)" },
-            { label: "changeVariableBy", type: "function", info: "変数を変更する (例: changeVariableBy('myVar', 1);)" },
-            { label: "sprite", type: "keyword", info: "スプライト定義の開始" },
-            { label: "stage", type: "keyword", info: "ステージ定義の開始" },
-            { label: "clone", type: "function", info: "クローンを作成" },
-            { label: "deleteThisClone", type: "function", info: "このクローンを削除" },
-            { label: "touching", type: "function", info: "タッチ判定 (例: touching('mouse-pointer');)" },
-            { label: "distanceTo", type: "function", info: "距離を測定 (例: distanceTo('sprite1');)" },
-            { label: "ask", type: "function", info: "質問する (例: ask('What's your name?');)" },
-            { label: "answer", type: "variable", info: "質問の答え" },
-            { label: "random", type: "function", info: "乱数を生成 (例: random(1, 10);)" },
-        ];
+        // カスタムコマンドとデフォルトコマンドを結合
+        const allCompletions = [...customCommands];
 
-        const filteredCompletions = completions.filter(item =>
+        const filteredCompletions = allCompletions.filter(item =>
             item.label.toLowerCase().startsWith(word.text.toLowerCase())
         );
 
@@ -103,7 +100,7 @@ const SourceTab = (props) => {
             from: word.from,
             options: filteredCompletions
         };
-    }, []);
+    }, [customCommands]); // customCommands が更新されたらscratchCompletionsも再生成
 
 
     // エディタの初期化とクリーンアップ (コンポーネントマウント時に一度だけ実行)
@@ -184,8 +181,7 @@ const SourceTab = (props) => {
                 editorInstance.current = null;
             }
         };
-    }, [scratchCompletions]); // 依存配列からselectedSpriteIdとspriteCodeを削除し、scratchCompletionsのみを維持
-                               // (scratchCompletionsはuseCallbackでメモ化されているため実質は空配列と同様)
+    }, [scratchCompletions]);
 
     const handleCodeChange = useCallback((newCode) => {
         setSpriteCode(prevCodeMap => ({
@@ -203,13 +199,11 @@ const SourceTab = (props) => {
 
     // selectedSpriteId または spriteCode が変更されたときにエディタの内容を更新
     useEffect(() => {
-        // editorInstance.current が null の場合（まだ初期化されていない場合）は処理をスキップ
         if (!editorInstance.current || !selectedSpriteId) {
             return;
         }
 
         const newCode = spriteCode[selectedSpriteId] || '';
-        // 現在のエディタのドキュメントと新しいコードが異なる場合のみ更新
         if (editorInstance.current.state.doc.toString() !== newCode) {
             editorInstance.current.dispatch({
                 changes: {
@@ -217,12 +211,10 @@ const SourceTab = (props) => {
                     to: editorInstance.current.state.doc.length,
                     insert: newCode
                 },
-                // エディタを更新する際に、Undo履歴に追加しないようにすることも可能
-                // userEvent: "replace"
             });
             console.log(`エディタの内容をスプライトID ${selectedSpriteId} のコードで更新しました。`);
         }
-    }, [selectedSpriteId, spriteCode]); // spriteCode も依存に含める
+    }, [selectedSpriteId, spriteCode]);
 
     // props.sprites または props.stage の変更を監視し、spriteCode を更新
     useEffect(() => {
@@ -255,6 +247,49 @@ const SourceTab = (props) => {
         }
     }, [props.sprites, props.stage, spriteCode]);
 
+    // ツールバーのアクションハンドラ
+    const handleUndo = useCallback(() => {
+        if (editorInstance.current) {
+            undo(editorInstance.current);
+        }
+    }, []);
+
+    const handleRedo = useCallback(() => {
+        if (editorInstance.current) {
+            redo(editorInstance.current);
+        }
+    }, []);
+
+    const handleCopy = useCallback(() => {
+        if (editorInstance.current) {
+            copySelected(editorInstance.current);
+        }
+    }, []);
+
+    const handleCut = useCallback(() => {
+        if (editorInstance.current) {
+            cutSelected(editorInstance.current);
+        }
+    }, []);
+
+    const handlePaste = useCallback(() => {
+        // 注: ブラウザのセキュリティ制約により、プログラムからクリップボードに直接アクセスして
+        // ペーストを行うことは困難です。ユーザーにCtrl+V / Cmd+Vの使用を促すのが一般的です。
+        // ここでは便宜上、アラートを出力します。
+        // より高度な実装には、クリップボードAPI (navigator.clipboard.readText()) の使用を検討しますが、
+        // ユーザーの許可が必要です。
+        console.warn("ペースト機能はブラウザのセキュリティ制約により、ボタンから直接実行できません。キーボードショートカット (Ctrl+V / Cmd+V) を使用してください。");
+        // 例: ユーザーにメッセージボックスを表示することも可能
+        // alert("Ctrl+V または Cmd+V を使用してペーストしてください。");
+    }, []);
+
+    const handleSearch = useCallback(() => {
+        if (editorInstance.current) {
+            startSearch(editorInstance.current);
+        }
+    }, []);
+
+
     if (!props.vm.editingTarget) {
         return null;
     }
@@ -265,8 +300,55 @@ const SourceTab = (props) => {
             ref={props.setRef}
             onMouseDown={props.onContainerClick}
         >
-            <div style={{ height: '100%', width: '100%' }}>
-                <div ref={editorRef} className="codemirror-container" style={{ height: '100%', width: '100%' }} />
+            {/* ツールバーコンテナ */}
+            <div className="flex justify-center p-3 space-x-2 bg-gray-700 rounded-t-lg shadow-md">
+                <button
+                    onClick={handleSearch}
+                    className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md shadow-sm transition-colors duration-200"
+                    title="検索 (Ctrl+F)"
+                >
+                    検索
+                </button>
+                <button
+                    onClick={handleCopy}
+                    className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md shadow-sm transition-colors duration-200"
+                    title="コピー (Ctrl+C)"
+                >
+                    コピー
+                </button>
+                <button
+                    onClick={handleCut}
+                    className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md shadow-sm transition-colors duration-200"
+                    title="カット (Ctrl+X)"
+                >
+                    カット
+                </button>
+                <button
+                    onClick={handlePaste}
+                    className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md shadow-sm transition-colors duration-200"
+                    title="ペースト (Ctrl+V / Cmd+V)"
+                >
+                    ペースト
+                </button>
+                <button
+                    onClick={handleUndo}
+                    className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md shadow-sm transition-colors duration-200"
+                    title="戻る (Ctrl+Z)"
+                >
+                    戻る
+                </button>
+                <button
+                    onClick={handleRedo}
+                    className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md shadow-sm transition-colors duration-200"
+                    title="進む (Ctrl+Shift+Z)"
+                >
+                    進む
+                </button>
+            </div>
+
+            {/* CodeMirrorエディタをマウントする場所 */}
+            <div style={{ height: 'calc(100% - 50px)', width: '100%' }} className="rounded-b-lg overflow-hidden">
+                <div ref={editorRef} className="codemirror-container w-full h-full" />
             </div>
         </div>
     );

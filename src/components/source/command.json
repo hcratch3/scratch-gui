@@ -1,0 +1,172 @@
+[
+    {
+        "label": "move",
+        "type": "function",
+        "info": "スプライトを移動します (例: move(10) steps;)"
+    },
+    {
+        "label": "turnRight",
+        "type": "function",
+        "info": "スプライトを右に回転します (例: turnRight(15) degrees;)"
+    },
+    {
+        "label": "turnLeft",
+        "type": "function",
+        "info": "スプライトを左に回転します (例: turnLeft(15) degrees;)"
+    },
+    {
+        "label": "say",
+        "type": "function",
+        "info": "スプライトが言います (例: say('Hello!');)"
+    },
+    {
+        "label": "think",
+        "type": "function",
+        "info": "スプライトが考えます (例: think('Hmm...');)"
+    },
+    {
+        "label": "whenGreenFlagClicked",
+        "type": "function",
+        "info": "緑の旗がクリックされたときに実行 (例: whenGreenFlagClicked(() => { ... });)"
+    },
+    {
+        "label": "forever",
+        "type": "keyword",
+        "info": "繰り返しのループ (例: forever(() => { ... });)"
+    },
+    {
+        "label": "if",
+        "type": "keyword",
+        "info": "条件分岐 (例: if (condition) { ... } else { ... };)"
+    },
+    {
+        "label": "else",
+        "type": "keyword",
+        "info": "条件分岐 (ifと合わせて使用)"
+    },
+    {
+        "label": "repeat",
+        "type": "function",
+        "info": "指定回数繰り返す (例: repeat(10, () => { ... });)"
+    },
+    {
+        "label": "glide",
+        "type": "function",
+        "info": "指定位置へ滑らかに移動 (例: glide(1, x, y);)"
+    },
+    {
+        "label": "goTo",
+        "type": "function",
+        "info": "指定位置へ移動 (例: goTo(x, y);)"
+    },
+    {
+        "label": "changeXby",
+        "type": "function",
+        "info": "X座標を変更 (例: changeXby(10);)"
+    },
+    {
+        "label": "changeYby",
+        "type": "function",
+        "info": "Y座標を変更 (例: changeYby(10);)"
+    },
+    {
+        "label": "setXto",
+        "type": "function",
+        "info": "X座標を設定 (例: setXto(0);)"
+    },
+    {
+        "label": "setYto",
+        "type": "function",
+        "info": "Y座標を設定 (例: setYto(0);)"
+    },
+    {
+        "label": "show",
+        "type": "function",
+        "info": "表示する (例: show();)"
+    },
+    {
+        "label": "hide",
+        "type": "function",
+        "info": "隠す (例: hide();)"
+    },
+    {
+        "label": "nextCostume",
+        "type": "function",
+        "info": "次のコスチューム (例: nextCostume();)"
+    },
+    {
+        "label": "switchCostumeTo",
+        "type": "function",
+        "info": "コスチュームを切り替える (例: switchCostumeTo('costume1');)"
+    },
+    {
+        "label": "wait",
+        "type": "function",
+        "info": "待つ (例: wait(1) seconds;)"
+    },
+    {
+        "label": "broadcast",
+        "type": "function",
+        "info": "メッセージを送る (例: broadcast('message1');)"
+    },
+    {
+        "label": "whenIReceive",
+        "type": "function",
+        "info": "メッセージを受け取ったとき (例: whenIReceive('message1', () => { ... });)"
+    },
+    {
+        "label": "setVariable",
+        "type": "function",
+        "info": "変数を設定する (例: setVariable('myVar', 0);)"
+    },
+    {
+        "label": "changeVariableBy",
+        "type": "function",
+        "info": "変数を変更する (例: changeVariableBy('myVar', 1);)"
+    },
+    {
+        "label": "sprite",
+        "type": "keyword",
+        "info": "スプライト定義の開始"
+    },
+    {
+        "label": "stage",
+        "type": "keyword",
+        "info": "ステージ定義の開始"
+    },
+    {
+        "label": "clone",
+        "type": "function",
+        "info": "クローンを作成"
+    },
+    {
+        "label": "deleteThisClone",
+        "type": "function",
+        "info": "このクローンを削除"
+    },
+    {
+        "label": "touching",
+        "type": "function",
+        "info": "タッチ判定 (例: touching('mouse-pointer');)"
+    },
+    {
+        "label": "distanceTo",
+        "type": "function",
+        "info": "距離を測定 (例: distanceTo('sprite1');)"
+    },
+    {
+        "label": "ask",
+        "type": "function",
+        "info": "質問する (例: ask('What's your name?');)"
+    },
+    {
+        "label": "answer",
+        "type": "variable",
+        "info": "質問の答え"
+    },
+    {
+        "label": "random",
+        "type": "function",
+        "info": "乱数を生成 (例: random(1, 10);)"
+    }
+]
