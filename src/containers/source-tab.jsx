@@ -59,7 +59,7 @@ const SourceTab = (props) => {
     useEffect(() => {
         const loadCustomCommands = async () => {
             try {
-                const response = await fetch('../components/source/command.json');
+                const response = await fetch('components/source/command.json');
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
