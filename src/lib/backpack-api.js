@@ -5,7 +5,7 @@ import spritePayload from './backpack/sprite-payload';
 import codePayload from './backpack/code-payload';
 import md5 from 'js-md5';
 
-const LOCAL_STORAGE_KEY = 'xcratchBackpack';
+const LOCAL_STORAGE_KEY = 'Hcratch3Backpack';
 
 const includeLocalStorageURLs = item => Object.assign({}, item, {
     // scratch-storage uses `body` to determine the file type from its file extension

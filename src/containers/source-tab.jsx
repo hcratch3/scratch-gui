@@ -3,14 +3,30 @@ import PropTypes from 'prop-types';
 import { connect } from 'react-redux';
 
 // CodeMirror 6のモジュールを直接インポート
-import { EditorState } from "@codemirror/state";
-import { EditorView, keymap, highlightActiveLine, lineNumbers } from "@codemirror/view";
-import { indentWithTab } from "@codemirror/commands";
+import { Extension, EditorState } from "@codemirror/state"; // Extensionを追加
+import {
+  EditorView, keymap, highlightSpecialChars, drawSelection,
+  highlightActiveLine, dropCursor, rectangularSelection,
+  crosshairCursor, lineNumbers, highlightActiveLineGutter
+} from "@codemirror/view";
+import {
+  defaultHighlightStyle, syntaxHighlighting, indentOnInput,
+  bracketMatching, foldGutter, foldKeymap
+} from "@codemirror/language";
+import {
+  defaultKeymap, history, historyKeymap
+} from "@codemirror/commands";
+import {
+  searchKeymap, highlightSelectionMatches
+} from "@codemirror/search";
+import {
+  autocompletion, completionKeymap, closeBrackets,
+  closeBracketsKeymap
+} from "@codemirror/autocomplete";
+import {lintKeymap} from "@codemirror/lint"; // リンター関連
+
 import { javascript } from "@codemirror/lang-javascript";
 import { oneDark } from "@codemirror/theme-one-dark";
-import { history, undo, redo } from '@codemirror/commands'; // 履歴機能
-import { bracketMatching } from '@codemirror/language'; // ブラケットマッチング
-import { autocompletion, CompletionContext } from '@codemirror/autocomplete'; // 入力補助用に追加
 
 import styles from '../components/source/source.css'; // 既存のスタイルシート
 import VM from 'scratch-vm';
@@ -23,7 +39,6 @@ const SourceTab = (props) => {
     const editorInstance = useRef(null); // CodeMirrorエディタインスタンスへの参照
 
     const [spriteCode, setSpriteCode] = useState(() => {
-        // 初期化時にスプライトのコードマップを作成
         const codeMap = {};
         Object.keys(props.sprites).forEach((spriteId) => {
             codeMap[spriteId] = '';
@@ -34,19 +49,15 @@ const SourceTab = (props) => {
         return codeMap;
     });
 
-    // 現在選択されているスプライトのIDを状態として保持
     const [selectedSpriteId, setSelectedSpriteId] = useState(props.editingTarget);
 
-    // Scratchブロックに対応するカスタム補完項目を定義
-    // この関数がCodeMirrorに補完候補を提供します
+    // Scratchブロックに対応するカスタム補完項目を定義 (再利用)
     const scratchCompletions = useCallback((context) => {
-        const word = context.matchBefore(/\w*/); // カーソル位置の単語をマッチ
+        const word = context.matchBefore(/\w*/);
         if (!word.from || word.from === word.to && !context.explicit) {
-            // 単語の途中ではない、または明示的なトリガーではない場合は補完しない
             return null;
         }
 
-        // Scratchの一般的なブロックや関連するキーワードをここにリストアップ
         const completions = [
             { label: "move", type: "function", info: "スプライトを移動します (例: move(10) steps;)" },
             { label: "turnRight", type: "function", info: "スプライトを右に回転します (例: turnRight(15) degrees;)" },
@@ -82,22 +93,19 @@ const SourceTab = (props) => {
             { label: "ask", type: "function", info: "質問する (例: ask('What's your name?');)" },
             { label: "answer", type: "variable", info: "質問の答え" },
             { label: "random", type: "function", info: "乱数を生成 (例: random(1, 10);)" },
-            // 必要に応じてさらにScratchブロックに対応するキーワードや関数を追加
         ];
 
-        // 単語のプレフィックスにマッチする項目をフィルタリング
         const filteredCompletions = completions.filter(item =>
-            item.label.toLowerCase().startsWith(word.text.toLowerCase()) // 大文字小文字を区別しない検索
+            item.label.toLowerCase().startsWith(word.text.toLowerCase())
         );
 
         return {
             from: word.from,
             options: filteredCompletions
         };
-    }, []); // 依存配列が空なので、この関数は一度だけ作成される
+    }, []);
 
 
-    // エディタの初期化とクリーンアップ
     useEffect(() => {
         const initializeEditor = () => {
             if (!editorRef.current) {
@@ -106,56 +114,67 @@ const SourceTab = (props) => {
 
             const initialDoc = spriteCode[selectedSpriteId] || '';
 
-            // エディタの拡張機能の定義
+            // 提示された多機能な拡張機能を統合
             const extensions = [
-                lineNumbers(),          // 行番号
-                history(),              // 履歴
-                bracketMatching(),      // ブラケットマッチング
-                highlightActiveLine(),  // アクティブな行のハイライト
-                // JavaScript言語サポートをベースとして使用
-                // ここで、必要に応じてカスタム言語拡張をプラグインすることができます
-                javascript(),
-                // カスタム入力補助を自動補完に追加
-                autocompletion({ override: [scratchCompletions] }),
-                keymap.of([
-                    indentWithTab,      // Tabキーでのインデント
-                    { key: "Mod-z", run: undo },       // Undo
-                    { key: "Mod-Shift-z", run: redo }  // Redo
-                ]),
+                // 基本的なCodeMirrorの機能
+                lineNumbers(), // 行番号
+                foldGutter(), // コード折りたたみ
+                highlightSpecialChars(), // 特殊文字のハイライト
+                history(), // 履歴
+                drawSelection(), // 独自の選択描画
+                dropCursor(), // ドロップカーソル
+                EditorState.allowMultipleSelections.of(true), // 複数選択を許可
+                indentOnInput(), // 入力時のインデント
+                syntaxHighlighting(defaultHighlightStyle), // デフォルトのシンタックスハイライト
+                bracketMatching(), // ブラケットマッチング
+                closeBrackets(), // ブラケットの自動閉じ
+                autocompletion({ override: [scratchCompletions] }), // 自動補完とカスタム補完
+                rectangularSelection(), // 長方形選択
+                crosshairCursor(), // クロスヘアカーソル
+                highlightActiveLine(), // アクティブな行のハイライト
+                highlightActiveLineGutter(), // アクティブな行のガターハイライト
+                highlightSelectionMatches(), // 選択範囲のマッチをハイライト
+                javascript(), // JavaScript言語サポート
                 oneDark, // ダークテーマ
                 EditorView.lineWrapping, // 行の折り返し
+
+                // キーマップの統合
+                keymap.of([
+                    ...closeBracketsKeymap, // ブラケット閉じ関連キーマップ
+                    ...defaultKeymap, // デフォルトのキーマップ
+                    ...searchKeymap, // 検索関連キーマップ
+                    ...historyKeymap, // 履歴関連キーマップ
+                    ...foldKeymap, // コード折りたたみ関連キーマップ
+                    ...completionKeymap, // 自動補完関連キーマップ
+                    ...lintKeymap // リンター関連キーマップ
+                ]),
+
+                // エディタの変更を監視するリスナー
                 EditorView.updateListener.of((update) => {
-                    // エディタの内容が変更されたときのコールバック
                     if (update.docChanged) {
                         handleCodeChange(update.state.doc.toString());
                     }
                 })
             ];
 
-            // エディタの状態を作成
             const startState = EditorState.create({
                 doc: initialDoc,
                 extensions: extensions
             });
 
-            // エディタのビューを作成し、DOM要素にマウント
             const view = new EditorView({
                 state: startState,
                 parent: editorRef.current
             });
 
-            // editorInstance refにエディタインスタンスを保存
             editorInstance.current = view;
-
-            console.log("CodeMirror 6 エディターが初期化されました。");
+            console.log("CodeMirror 6 多機能エディターが初期化されました。");
         };
 
-        // editorInstance.current が null の場合のみ初期化を実行
         if (!editorInstance.current) {
             initializeEditor();
         }
 
-        // クリーンアップ関数: コンポーネントがアンマウントされるときにエディタを破棄
         return () => {
             if (editorInstance.current) {
                 console.log("CodeMirror 6 エディターを破棄します。");
@@ -163,7 +182,7 @@ const SourceTab = (props) => {
                 editorInstance.current = null;
             }
         };
-    }, [selectedSpriteId, spriteCode, scratchCompletions]); // scratchCompletions も依存に含める
+    }, [selectedSpriteId, spriteCode, scratchCompletions]); // 依存配列にscratchCompletionsを含める
 
     const handleCodeChange = useCallback((newCode) => {
         setSpriteCode(prevCodeMap => ({
@@ -172,22 +191,18 @@ const SourceTab = (props) => {
         }));
     }, [selectedSpriteId]);
 
-    // props.editingTarget が変更されたときの処理
     useEffect(() => {
         if (props.editingTarget !== selectedSpriteId) {
             setSelectedSpriteId(props.editingTarget);
         }
     }, [props.editingTarget, selectedSpriteId]);
 
-    // selectedSpriteId または spriteCode が変更され、かつエディタがロード済みの場合
     useEffect(() => {
-        // editorInstance.current が null の場合（まだ初期化されていない場合）は処理をスキップ
         if (!editorInstance.current || !selectedSpriteId) {
             return;
         }
 
         const newCode = spriteCode[selectedSpriteId] || '';
-        // 現在のエディタのドキュメントと新しいコードが異なる場合のみ更新
         if (editorInstance.current.state.doc.toString() !== newCode) {
             editorInstance.current.dispatch({
                 changes: {
@@ -200,12 +215,10 @@ const SourceTab = (props) => {
         }
     }, [selectedSpriteId, spriteCode]);
 
-    // props.sprites または props.stage の変更を監視し、spriteCode を更新
     useEffect(() => {
         const newCodeMap = {};
         let changed = false;
 
-        // 既存のスプライトのコードを保持または初期化
         Object.keys(props.sprites).forEach((spriteId) => {
             if (!(spriteId in spriteCode)) {
                 changed = true;
@@ -219,7 +232,6 @@ const SourceTab = (props) => {
             newCodeMap[props.stage.id] = spriteCode[props.stage.id] || '';
         }
 
-        // 存在しないスプライトのコードを削除
         for (const id in spriteCode) {
             if (!(id in newCodeMap)) {
                 delete spriteCode[id];
