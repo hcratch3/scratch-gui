@@ -27,7 +27,6 @@ import {
 import {lintKeymap} from "@codemirror/lint";
 
 import { javascript } from "@codemirror/lang-javascript";
-import { oneDark } from "@codemirror/theme-one-dark";
 
 import styles from '../components/source/source.css';
 import VM from 'scratch-vm';
@@ -35,291 +34,9 @@ import { activateTab, SOURCE_TAB_INDEX } from '../reducers/editor-tab';
 import { setRestore } from '../reducers/restore-deletion';
 import errorBoundaryHOC from '../lib/error-boundary-hoc.jsx';
 
-// --- フェーズ1: ブロック -> コード (デコンパイラ) ロジック ---
-
-/**
- * Scratch 3.0のブロックデータをプログラミング初心者にも分かりやすいJavaScript風のコードに変換するデコンパイラ。
- * これは簡略化された実装であり、全てのブロックタイプや複雑な構造に対応するものではありません。
- *
- * @param {object | Map<string, Object>} blocksMap - VMから取得したブロックIDをキーとするブロックオブジェクトのMapまたはプレーンオブジェクト
- * @param {string} startBlockId - スクリプトの開始ブロックのID (通常はハットブロック)
- * @param {number} indentLevel - 現在のインデントレベル
- * @returns {string} 生成されたJavaScript風のコード文字列
- */
-const decompileBlockToJs = (blocksMap, startBlockId, indentLevel = 0) => {
-    let code = '';
-    // blocksMapがMapかオブジェクトかに応じてgetまたはブラケット記法を使用するヘルパー関数
-    const getBlockById = (map, id) => {
-        if (!map || !id) return null;
-        if (map instanceof Map) {
-            return map.get(id);
-        } else if (typeof map === 'object') {
-            return map[id];
-        }
-        return null;
-    };
-
-    let currentBlock = getBlockById(blocksMap, startBlockId);
-    const indent = '\t'.repeat(indentLevel);
-
-    // ヘルパー関数: 入力ブロックまたはフィールドの値を解決
-    const resolveInput = (input) => {
-        if (!input) return 'undefined';
-
-        // 値ブロック（VALUE, VARIABLE, LIST, BROADCAST_MESSAGE）
-        if (input.block) {
-            const connectedBlock = getBlockById(blocksMap, input.block);
-            if (connectedBlock) {
-                // 入れ子ブロックはインデントなしで解決し、文字列または数値として返す
-                // math_numberの場合、直接fields.NUM.valueを使用
-                if (connectedBlock.opcode === 'math_number' && connectedBlock.fields && connectedBlock.fields.NUM) {
-                    return JSON.stringify(connectedBlock.fields.NUM.value);
-                }
-                // それ以外の値ブロック（例: 変数、演算結果）
-                return decompileBlockToJs(blocksMap, connectedBlock.id, 0).trim(); // trim()で余分な改行や空白を除去
-            }
-        }
-        // シャドウブロック（非接続の値）やフィールド
-        if (input.shadow) {
-            const shadowBlock = getBlockById(blocksMap, input.shadow);
-            if (shadowBlock) {
-                // シャドウブロックの値を解決 (数値、文字列など)
-                if (shadowBlock.opcode === 'math_number' && shadowBlock.fields && shadowBlock.fields.NUM) {
-                    return JSON.stringify(shadowBlock.fields.NUM.value);
-                }
-                // その他のシャドウブロックの値 (例: sayのテキストボックス)
-                if (shadowBlock.fields && shadowBlock.fields.TEXT) {
-                    return JSON.stringify(shadowBlock.fields.TEXT.value);
-                }
-            }
-        }
-        // フィールド（例: 変数名、メッセージ名）
-        if (input.fields && input.fields.VARIABLE) {
-            return JSON.stringify(input.fields.VARIABLE.value);
-        }
-        // デフォルトの直接値 (あまり使われないが念のため)
-        if (input.value !== undefined) {
-            return JSON.stringify(input.value);
-        }
-        return 'null'; // 解決できない場合
-    };
-
-    // ヘルパー関数: フィールドの値を解決 (主にドロップダウンや変数名)
-    const resolveField = (field) => {
-        if (!field) return 'undefined';
-        if (field.value !== undefined) {
-            return typeof field.value === 'string' ? JSON.stringify(field.value) : field.value;
-        }
-        return 'null';
-    };
-
-    while (currentBlock) {
-        let line = indent;
-        const opcode = currentBlock.opcode;
-        const inputs = currentBlock.inputs || {};
-        const fields = currentBlock.fields || {};
-
-        switch (opcode) {
-            // --- イベントブロック ---
-            case 'event_whenflagclicked':
-                line += `onGreenFlagClicked() {\n`;
-                line += decompileBlockToJs(blocksMap, currentBlock.next, indentLevel + 1);
-                line += `${indent}}`;
-                currentBlock = null; // ハットブロックなので次はない
-                break;
-            case 'event_whenkeypressed':
-                line += `onKeyPressed(${resolveField(fields.KEY_OPTION)}) {\n`;
-                line += decompileBlockToJs(blocksMap, currentBlock.next, indentLevel + 1);
-                line += `${indent}}`;
-                currentBlock = null;
-                break;
-            case 'event_whenthisspriteclicked':
-                line += `onSpriteClicked() {\n`;
-                line += decompileBlockToJs(blocksMap, currentBlock.next, indentLevel + 1);
-                line += `${indent}}`;
-                currentBlock = null;
-                break;
-            case 'event_whenbroadcastreceived':
-                line += `onReceive(${resolveField(fields.BROADCAST_OPTION)}) {\n`;
-                line += decompileBlockToJs(blocksMap, currentBlock.next, indentLevel + 1);
-                line += `${indent}}`;
-                currentBlock = null;
-                break;
-
-            // --- 動きブロック ---
-            case 'motion_movesteps':
-                line += `move(${resolveInput(inputs.STEPS)});`;
-                break;
-            case 'motion_turnright':
-                line += `turnRight(${resolveInput(inputs.DEGREES)});`;
-                break;
-            case 'motion_turnleft':
-                line += `turnLeft(${resolveInput(inputs.DEGREES)});`;
-                break;
-            case 'motion_goto':
-                line += `goTo(${resolveInput(inputs.TO)});`;
-                break;
-            case 'motion_gotoxy':
-                line += `goToX(${resolveInput(inputs.X)}), Y(${resolveInput(inputs.Y)});`;
-                break;
-            case 'motion_changexby':
-                line += `changeXby(${resolveInput(inputs.DX)});`;
-                break;
-            case 'motion_setx':
-                line += `setXto(${resolveInput(inputs.X)});`;
-                break;
-            case 'motion_changeyby':
-                line += `changeYby(${resolveInput(inputs.DY)});`;
-                break;
-            case 'motion_sety':
-                line += `setYto(${resolveInput(inputs.Y)});`;
-                break;
-
-            // --- 見た目ブロック ---
-            case 'looks_sayforsecs':
-                line += `say(${resolveInput(inputs.MESSAGE)}, ${resolveInput(inputs.SECS)});`;
-                break;
-            case 'looks_say':
-                line += `say(${resolveInput(inputs.MESSAGE)});`;
-                break;
-            case 'looks_thinkforsecs':
-                line += `think(${resolveInput(inputs.MESSAGE)}, ${resolveInput(inputs.SECS)});`;
-                break;
-            case 'looks_think':
-                line += `think(${resolveInput(inputs.MESSAGE)});`;
-                break;
-            case 'looks_show':
-                line += `show();`;
-                break;
-            case 'looks_hide':
-                line += `hide();`;
-                break;
-            case 'looks_nextcostume':
-                line += `nextCostume();`;
-                break;
-            case 'looks_switchcostumeto':
-                line += `switchCostumeTo(${resolveField(fields.COSTUME)});`;
-                break;
-
-            // --- 制御ブロック ---
-            case 'control_wait':
-                line += `wait(${resolveInput(inputs.DURATION)});`;
-                break;
-            case 'control_repeat':
-                line += `repeat(${resolveInput(inputs.TIMES)}) {\n`;
-                line += decompileBlockToJs(blocksMap, inputs.SUBSTACK.block, indentLevel + 1);
-                line += `${indent}}`;
-                break;
-            case 'control_forever':
-                line += `forever() {\n`;
-                line += decompileBlockToJs(blocksMap, inputs.SUBSTACK.block, indentLevel + 1);
-                line += `${indent}}`;
-                break;
-            case 'control_if':
-                line += `if (${decompileBlockToJs(blocksMap, inputs.CONDITION.block, 0)}) {\n`;
-                line += decompileBlockToJs(blocksMap, inputs.SUBSTACK.block, indentLevel + 1);
-                line += `${indent}}`;
-                break;
-            case 'control_if_else':
-                line += `if (${decompileBlockToJs(blocksMap, inputs.CONDITION.block, 0)}) {\n`;
-                line += decompileBlockToJs(blocksMap, inputs.SUBSTACK.block, indentLevel + 1);
-                line += `${indent}} else {\n`;
-                line += decompileBlockToJs(blocksMap, inputs.SUBSTACK2.block, indentLevel + 1);
-                line += `${indent}}`;
-                break;
-            
-            // --- 演算ブロック ---
-            case 'operator_add':
-                line += `(${decompileBlockToJs(blocksMap, inputs.NUM1.block, 0)} + ${decompileBlockToJs(blocksMap, inputs.NUM2.block, 0)})`;
-                break;
-            case 'operator_subtract':
-                line += `(${decompileBlockToJs(blocksMap, inputs.NUM1.block, 0)} - ${decompileBlockToJs(blocksMap, inputs.NUM2.block, 0)})`;
-                break;
-            case 'operator_multiply':
-                line += `(${decompileBlockToJs(blocksMap, inputs.NUM1.block, 0)} * ${decompileBlockToJs(blocksMap, inputs.NUM2.block, 0)})`;
-                break;
-            case 'operator_divide':
-                line += `(${decompileBlockToJs(blocksMap, inputs.NUM1.block, 0)} / ${decompileBlockToJs(blocksMap, inputs.NUM2.block, 0)})`;
-                break;
-            case 'operator_random':
-                line += `random(${decompileBlockToJs(blocksMap, inputs.FROM.block, 0)}, ${decompileBlockToJs(blocksMap, inputs.TO.block, 0)})`;
-                break;
-            case 'operator_gt':
-                line += `(${decompileBlockToJs(blocksMap, inputs.OPERAND1.block, 0)} > ${decompileBlockToJs(blocksMap, inputs.OPERAND2.block, 0)})`;
-                break;
-            case 'operator_lt':
-                line += `(${decompileBlockToJs(blocksMap, inputs.OPERAND1.block, 0)} < ${decompileBlockToJs(blocksMap, inputs.OPERAND2.block, 0)})`;
-                break;
-            case 'operator_equals':
-                line += `(${decompileBlockToJs(blocksMap, inputs.OPERAND1.block, 0)} === ${decompileBlockToJs(blocksMap, inputs.OPERAND2.block, 0)})`;
-                break;
-            case 'operator_and':
-                line += `(${decompileBlockToJs(blocksMap, inputs.OPERAND1.block, 0)} && ${decompileBlockToJs(blocksMap, inputs.OPERAND2.block, 0)})`;
-                break;
-            case 'operator_or':
-                line += `(${decompileBlockToJs(blocksMap, inputs.OPERAND1.block, 0)} || ${decompileBlockToJs(blocksMap, inputs.OPERAND2.block, 0)})`;
-                break;
-            case 'operator_not':
-                line += `!(${decompileBlockToJs(blocksMap, inputs.OPERAND.block, 0)})`;
-                break;
-            case 'operator_join':
-                line += `join(${decompileBlockToJs(blocksMap, inputs.STRING1.block, 0)}, ${decompileBlockToJs(blocksMap, inputs.STRING2.block, 0)})`;
-                break;
-
-            // --- 変数ブロック ---
-            case 'data_setvariableto':
-                line += `setVariable(${resolveField(fields.VARIABLE)}, ${resolveInput(inputs.VALUE)});`;
-                break;
-            case 'data_changevariableby':
-                line += `changeVariableBy(${resolveField(fields.VARIABLE)}, ${resolveInput(inputs.VALUE)});`;
-                break;
-            case 'data_variable': // 変数名を取得 (reporter)
-                line += `${resolveField(fields.VARIABLE)}`;
-                break;
-            
-            // --- 数値リテラル (reporter) ---
-            case 'math_number':
-                line += `${resolveField(fields.NUM)}`;
-                break;
-
-            // --- その他 (reporter) ---
-            case 'sensing_askandwait':
-                line += `ask(${resolveInput(inputs.QUESTION)});`;
-                break;
-            case 'sensing_answer':
-                line += `answer`;
-                break;
-            case 'looks_backdropname':
-                line += `backdropName`;
-                break;
-            case 'looks_costume':
-                line += `costumeName`;
-                break;
-            case 'motion_xposition':
-                line += `xPosition`;
-                break;
-            case 'motion_yposition':
-                line += `yPosition`;
-                break;
-            case 'motion_direction':
-                line += `direction`;
-                break;
-
-            default:
-                // 未対応のブロックはコメントアウトして、元のJSON情報を出力
-                line += `// Unsupported Block: ${opcode} ${JSON.stringify(currentBlock, null, 2).replace(/\n/g, `\n${indent}// `)}`;
-                break;
-        }
-
-        code += line + '\n';
-        if (currentBlock && currentBlock.next) {
-            currentBlock = getBlockById(blocksMap, currentBlock.next);
-        } else {
-            currentBlock = null;
-        }
-    }
-    return code;
-};
+// リファクタリング: 外部ファイルからデコンパイラと補完リストをインポート
+import decompileBlockToJs from '../lib/decompiler/decompileBlockToJs'; // ★パスは実際の配置に合わせる
+import defaultCompletions from '../lib/autocompletion/defaultCompletions'; // ★パスは実際の配置に合わせる
 
 
 const SourceTab = (props) => {
@@ -339,53 +56,14 @@ const SourceTab = (props) => {
 
     const [selectedSpriteId, setSelectedSpriteId] = useState(props.editingTarget);
     
-    // Scratchブロックに対応するカスタム補完項目を定義 (変更なし)
+    // Scratchブロックに対応するカスタム補完項目を定義 (外部ファイルからインポート)
     const scratchCompletions = useCallback((context) => {
         const word = context.matchBefore(/\w*/);
         if (!word.from || word.from === word.to && !context.explicit) {
             return null;
         }
 
-        const defaultCompletions = [
-            { label: "move", type: "function", info: "スプライトを移動します (例: move(10) steps;)" },
-            { label: "turnRight", type: "function", info: "スプライトを右に回転します (例: turnRight(15) degrees;)" },
-            { label: "turnLeft", type: "function", info: "スプライトを左に回転します (例: turnLeft(15) degrees;)" },
-            { label: "say", type: "function", info: "スプライトが言います (例: say('Hello!');)" },
-            { label: "think", type: "function", info: "スプライトが考えます (例: think('Hmm...');)" },
-            { label: "whenGreenFlagClicked", type: "function", info: "緑の旗がクリックされたときに実行 (例: whenGreenFlagClicked(() => { ... });)" },
-            { label: "forever", type: "keyword", info: "繰り返しのループ (例: forever(() => { ... });)" },
-            { label: "if", type: "keyword", info: "条件分岐 (例: if (condition) { ... } else { ... };)" },
-            { label: "else", type: "keyword", info: "条件分岐 (ifと合わせて使用)" },
-            { label: "repeat", type: "function", info: "指定回数繰り返す (例: repeat(10, () => { ... });)" },
-            { label: "glide", type: "function", info: "指定位置へ滑らかに移動 (例: glide(1, x, y);)" },
-            { label: "goTo", type: "function", info: "指定位置へ移動 (例: goTo(x, y);)" },
-            { label: "changeXby", type: "function", info: "X座標を変更 (例: changeXby(10);)" },
-            { label: "changeYby", type: "function", info: "Y座標を変更 (例: changeYby(10);)" },
-            { label: "setXto", type: "function", info: "X座標を設定 (例: setXto(0);)" },
-            { label: "setYto", type: "function", info: "Y座標を設定 (例: setYto(0);)" },
-            { label: "show", type: "function", info: "表示する (例: show();)" },
-            { label: "hide", type: "function", info: "隠す (例: hide();)" },
-            { label: "nextCostume", type: "function", info: "次のコスチューム (例: nextCostume();)" },
-            { label: "switchCostumeTo", type: "function", info: "コスチュームを切り替える (例: switchCostumeTo('costume1');)" },
-            { label: "wait", type: "function", info: "待つ (例: wait(1) seconds;)" },
-            { label: "broadcast", type: "function", info: "メッセージを送る (例: broadcast('message1');)" },
-            { label: "whenIReceive", type: "function", info: "メッセージを受け取ったとき (例: whenIReceive('message1', () => { ... });)" },
-            { label: "setVariable", type: "function", info: "変数を設定する (例: setVariable('myVar', 0);)" },
-            { label: "changeVariableBy", type: "function", info: "変数を変更する (例: changeVariableBy('myVar', 1);)" },
-            { label: "sprite", type: "keyword", info: "スプライト定義の開始" },
-            { label: "stage", type: "keyword", info: "ステージ定義の開始" },
-            { label: "clone", type: "function", info: "クローンを作成" },
-            { label: "deleteThisClone", type: "function", info: "このクローンを削除" },
-            { label: "touching", type: "function", info: "タッチ判定 (例: touching('mouse-pointer');)" },
-            { label: "distanceTo", type: "function", info: "距離を測定 (例: distanceTo('sprite1');)" },
-            { label: "ask", type: "function", info: "質問する (例: ask('What\'s your name?');)" },
-            { label: "answer", type: "variable", info: "質問の答え" },
-            { label: "random", type: "function", info: "乱数を生成 (例: random(1, 10);)" },
-        ];
-
-        const allCompletions = defaultCompletions;
-
-        const filteredCompletions = allCompletions.filter(item =>
+        const filteredCompletions = defaultCompletions.filter(item =>
             item.label.toLowerCase().startsWith(word.text.toLowerCase())
         );
 
@@ -423,7 +101,6 @@ const SourceTab = (props) => {
                 highlightActiveLineGutter(),
                 highlightSelectionMatches(),
                 javascript(), // JavaScriptシンタックスハイライトを使用
-                oneDark,
                 EditorView.lineWrapping,
                 keymap.of([
                     ...closeBracketsKeymap,
