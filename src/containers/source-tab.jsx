@@ -222,8 +222,7 @@ const SourceTab = (props) => {
         }
     }, [props.editingTarget, selectedSpriteId]);
 
-    // **新規追加**: `tosh2` を使用してScratchブロックをJavaScriptにコンパイルするロジック
-    // `selectedSpriteId` または `props.vm` (内部のブロックデータ変更を感知するため) が変更されたときに実行
+    // `tosh2` を使用してScratchブロックをJavaScriptにコンパイルするロジック (変更なし)
     useEffect(() => {
         if (!props.vm || !selectedSpriteId) {
             return;
@@ -234,22 +233,15 @@ const SourceTab = (props) => {
             if (target && target.blocks) {
                 const blocksMap = target.blocks.getBlocks();
                 const blocksObject = {};
-                // CodeMirrorの補完機能向けに、Mapをtosh2が期待する形式のオブジェクトに変換
                 blocksMap.forEach((block, id) => {
                     blocksObject[id] = block.toJSON();
                 });
 
-                // tosh2 でブロックをJavaScriptにコンパイル
                 const compiledJs = tosh2.compile(blocksObject);
 
-                // コンパイルされたJavaScriptコードでエディタのコンテンツを更新
-                // ただし、直接setSpriteCodeを呼び出すと無限ループになる可能性があるため、
-                // 既存のhandleCodeChangeを使わず、CodeMirrorインスタンスを直接更新する
-                // また、ユーザーが手動で編集している場合は上書きしないよう考慮が必要。
-                // ここでは自動コンパイルとして常に上書きする前提。
                 if (editorInstance.current) {
                     const currentEditorDoc = editorInstance.current.state.doc.toString();
-                    if (currentEditorDoc !== compiledJs) { // 変更がある場合のみ更新
+                    if (currentEditorDoc !== compiledJs) {
                         editorInstance.current.dispatch({
                             changes: {
                                 from: 0,
@@ -260,7 +252,6 @@ const SourceTab = (props) => {
                         console.log(`tosh2でコンパイルされたコードをエディタに表示しました。`);
                     }
                 }
-                // また、spriteCode stateも更新しておくことで、スプライト切り替え時の初期表示を正しくする
                 setSpriteCode(prevCodeMap => ({
                     ...prevCodeMap,
                     [selectedSpriteId]: compiledJs
@@ -269,7 +260,6 @@ const SourceTab = (props) => {
             }
         } catch (error) {
             console.error('tosh2でのコンパイルに失敗しました:', error);
-            // コンパイル失敗時は、エラーメッセージを表示したり、エディタをクリアしたりする
             if (editorInstance.current) {
                 editorInstance.current.dispatch({
                     changes: {
@@ -284,14 +274,9 @@ const SourceTab = (props) => {
                 [selectedSpriteId]: `// コンパイルエラー: ${error.message}\n`
             }));
         }
-    }, [selectedSpriteId, props.vm]); // selectedSpriteId または VM の変更で再実行
+    }, [selectedSpriteId, props.vm]);
 
     // selectedSpriteId または spriteCode が変更されたときにエディタの内容を更新 (変更なし)
-    // tosh2のuseEffectがエディタを更新するため、このuseEffectは
-    // 手動編集とtosh2コンパイルの競合を避けるために注意が必要。
-    // 上記のtosh2のuseEffectで直接editorInstance.currentを更新しているため、
-    // このuseEffectが不要になるか、ロジックの調整が必要かもしれません。
-    // 今回の例では、tosh2の出力が優先されるようにしています。
     useEffect(() => {
         if (!editorInstance.current || !selectedSpriteId) {
             return;
@@ -341,7 +326,7 @@ const SourceTab = (props) => {
         }
     }, [props.sprites, props.stage, spriteCode]);
 
-    // ツールバーのアクションハンドラ (変更なし)
+    // ツールバーのアクションハンドラ
     const handleUndo = useCallback(() => {
         if (editorInstance.current) {
             undo(editorInstance.current);
@@ -373,6 +358,36 @@ const SourceTab = (props) => {
     const handleSearch = useCallback(() => {
         if (editorInstance.current) {
             startSearch(editorInstance.current);
+        }
+    }, []);
+
+    // **新規追加**: コンパイルされたJavaScriptコードを実行するためのハンドラ
+    const handleRunCompiledCode = useCallback(() => {
+        if (editorInstance.current) {
+            const currentCode = editorInstance.current.state.doc.toString();
+            console.log("--- コンパイルされたJavaScriptコードの実行を試みます ---");
+            console.log(currentCode);
+            console.log("-------------------------------------------------");
+            console.log("注意: このコードはブラウザのJavaScriptエンジンで実行されますが、");
+            console.log("直接Scratch VMのスプライトやステージを操作するものではありません。");
+            console.log("VMを操作するには、コンパイルされたJSとVMのAPIを橋渡しする");
+            console.log("カスタムのバインディング層と安全な実行環境が必要です。");
+
+            // 例: もしJavaScriptコードがシンプルな関数定義であれば、
+            // new Function() で実行を試みることもできますが、
+            // tosh2の出力はVM内部のAPIを直接叩くものなので、
+            // 通常はそのままでは動きません。
+            // 非常に単純なconsole.logなどを含むコードであれば実行されます。
+            try {
+                // セキュリティリスクを理解した上でのデモンストレーション用途
+                // 実際のアプリケーションでは、より安全なサンドボックス化が必要です。
+                // 例: new Function('console.log("Hello from compiled JS!");')();
+                // tosh2の出力はVMの内部APIに依存するため、この方法は一般的に不十分です。
+                // const func = new Function(currentCode);
+                // func();
+            } catch (e) {
+                console.error("JavaScriptコードの実行中にエラーが発生しました:", e);
+            }
         }
     }, []);
 
@@ -430,6 +445,13 @@ const SourceTab = (props) => {
                     title="進む (Ctrl+Shift+Z)"
                 >
                     進む
+                </button>
+                <button
+                    onClick={handleRunCompiledCode}
+                    className="p-2 bg-green-500 hover:bg-green-600 text-white rounded-md shadow-sm transition-colors duration-200 ml-4"
+                    title="コンパイルされたコードを実行 (コンソールに出力)"
+                >
+                    コードを実行
                 </button>
             </div>
 
