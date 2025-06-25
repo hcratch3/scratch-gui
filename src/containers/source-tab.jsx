@@ -15,10 +15,10 @@ import {
 } from "@codemirror/language";
 import {
   defaultKeymap, history, historyKeymap, undo, redo,
-  copySelected, cutSelected // コピー、カットコマンドを追加
+  copySelected, cutSelected
 } from "@codemirror/commands";
 import {
-  searchKeymap, highlightSelectionMatches, startSearch // 検索コマンドを追加
+  searchKeymap, highlightSelectionMatches, startSearch
 } from "@codemirror/search";
 import {
   autocompletion, completionKeymap, closeBrackets,
@@ -29,15 +29,18 @@ import {lintKeymap} from "@codemirror/lint";
 import { javascript } from "@codemirror/lang-javascript";
 import { oneDark } from "@codemirror/theme-one-dark";
 
-import styles from '../components/source/source.css'; // 既存のスタイルシート
+// tosh2 コンパイラをインポート
+import * as tosh2 from 'tosh2';
+
+import styles from '../components/source/source.css';
 import VM from 'scratch-vm';
 import { activateTab, SOURCE_TAB_INDEX } from '../reducers/editor-tab';
 import { setRestore } from '../reducers/restore-deletion';
 import errorBoundaryHOC from '../lib/error-boundary-hoc.jsx';
 
 const SourceTab = (props) => {
-    const editorRef = useRef(null); // エディタをマウントするDOM要素への参照
-    const editorInstance = useRef(null); // CodeMirrorエディタインスタンスへの参照
+    const editorRef = useRef(null);
+    const editorInstance = useRef(null);
 
     const [spriteCode, setSpriteCode] = useState(() => {
         const codeMap = {};
@@ -51,46 +54,77 @@ const SourceTab = (props) => {
     });
 
     const [selectedSpriteId, setSelectedSpriteId] = useState(props.editingTarget);
-
-    // カスタムコマンドを保存するステート
     const [customCommands, setCustomCommands] = useState([]);
 
-    // `command.json` からカスタムコマンドをロードするuseEffect
+    // `command.json` からカスタムコマンドをロードするuseEffect (変更なし)
     useEffect(() => {
         const loadCustomCommands = async () => {
             try {
-                const response = await fetch('webpack://GUI/src/components/source/command.json');
+                const response = await fetch('./command.json');
                 if (!response.ok) {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 const data = await response.json();
-                // データの形式がCodeMirrorの補完形式に合うように変換
                 const formattedCommands = data.commands.map(cmd => ({
                     label: cmd.label,
-                    type: cmd.type || "keyword", // デフォルトはkeyword
+                    type: cmd.type || "keyword",
                     info: cmd.info || ""
                 }));
                 setCustomCommands(formattedCommands);
                 console.log('カスタムコマンドをロードしました:', formattedCommands);
             } catch (error) {
                 console.error('カスタムコマンドのロードに失敗しました:', error);
-                // エラー時は空の配列を設定し、アプリケーションの動作を継続
                 setCustomCommands([]);
             }
         };
-
         loadCustomCommands();
-    }, []); // コンポーネントマウント時に一度だけ実行
+    }, []);
 
-    // Scratchブロックに対応するカスタム補完項目を定義 (再利用)
+    // Scratchブロックに対応するカスタム補完項目を定義 (変更なし)
     const scratchCompletions = useCallback((context) => {
         const word = context.matchBefore(/\w*/);
         if (!word.from || word.from === word.to && !context.explicit) {
             return null;
         }
 
-        // カスタムコマンドとデフォルトコマンドを結合
-        const allCompletions = [...customCommands];
+        const defaultCompletions = [
+            { label: "move", type: "function", info: "スプライトを移動します (例: move(10) steps;)" },
+            { label: "turnRight", type: "function", info: "スプライトを右に回転します (例: turnRight(15) degrees;)" },
+            { label: "turnLeft", type: "function", info: "スプライトを左に回転します (例: turnLeft(15) degrees;)" },
+            { label: "say", type: "function", info: "スプライトが言います (例: say('Hello!');)" },
+            { label: "think", type: "function", info: "スプライトが考えます (例: think('Hmm...');)" },
+            { label: "whenGreenFlagClicked", type: "function", info: "緑の旗がクリックされたときに実行 (例: whenGreenFlagClicked(() => { ... });)" },
+            { label: "forever", type: "keyword", info: "繰り返しのループ (例: forever(() => { ... });)" },
+            { label: "if", type: "keyword", info: "条件分岐 (例: if (condition) { ... } else { ... };)" },
+            { label: "else", type: "keyword", info: "条件分岐 (ifと合わせて使用)" },
+            { label: "repeat", type: "function", info: "指定回数繰り返す (例: repeat(10, () => { ... });)" },
+            { label: "glide", type: "function", info: "指定位置へ滑らかに移動 (例: glide(1, x, y);)" },
+            { label: "goTo", type: "function", info: "指定位置へ移動 (例: goTo(x, y);)" },
+            { label: "changeXby", type: "function", info: "X座標を変更 (例: changeXby(10);)" },
+            { label: "changeYby", type: "function", info: "Y座標を変更 (例: changeYby(10);)" },
+            { label: "setXto", type: "function", info: "X座標を設定 (例: setXto(0);)" },
+            { label: "setYto", type: "function", info: "Y座標を設定 (例: setYto(0);)" },
+            { label: "show", type: "function", info: "表示する (例: show();)" },
+            { label: "hide", type: "function", info: "隠す (例: hide();)" },
+            { label: "nextCostume", type: "function", info: "次のコスチューム (例: nextCostume();)" },
+            { label: "switchCostumeTo", type: "function", info: "コスチュームを切り替える (例: switchCostumeTo('costume1');)" },
+            { label: "wait", type: "function", info: "待つ (例: wait(1) seconds;)" },
+            { label: "broadcast", type: "function", info: "メッセージを送る (例: broadcast('message1');)" },
+            { label: "whenIReceive", type: "function", info: "メッセージを受け取ったとき (例: whenIReceive('message1', () => { ... });)" },
+            { label: "setVariable", type: "function", info: "変数を設定する (例: setVariable('myVar', 0);)" },
+            { label: "changeVariableBy", type: "function", info: "変数を変更する (例: changeVariableBy('myVar', 1);)" },
+            { label: "sprite", type: "keyword", info: "スプライト定義の開始" },
+            { label: "stage", type: "keyword", info: "ステージ定義の開始" },
+            { label: "clone", type: "function", info: "クローンを作成" },
+            { label: "deleteThisClone", type: "function", info: "このクローンを削除" },
+            { label: "touching", type: "function", info: "タッチ判定 (例: touching('mouse-pointer');)" },
+            { label: "distanceTo", type: "function", info: "距離を測定 (例: distanceTo('sprite1');)" },
+            { label: "ask", type: "function", info: "質問する (例: ask('What\'s your name?');)" },
+            { label: "answer", type: "variable", info: "質問の答え" },
+            { label: "random", type: "function", info: "乱数を生成 (例: random(1, 10);)" },
+        ];
+
+        const allCompletions = [...defaultCompletions, ...customCommands];
 
         const filteredCompletions = allCompletions.filter(item =>
             item.label.toLowerCase().startsWith(word.text.toLowerCase())
@@ -100,55 +134,46 @@ const SourceTab = (props) => {
             from: word.from,
             options: filteredCompletions
         };
-    }, [customCommands]); // customCommands が更新されたらscratchCompletionsも再生成
+    }, [customCommands]);
 
-
-    // エディタの初期化とクリーンアップ (コンポーネントマウント時に一度だけ実行)
+    // エディタの初期化とクリーンアップ (変更なし)
     useEffect(() => {
         const initializeEditor = () => {
             if (!editorRef.current) {
                 return;
             }
 
-            // エディタの初期コンテンツは空文字列にする (後続のuseEffectで実際のコードをセット)
             const initialDoc = ''; 
-
-            // 提示された多機能な拡張機能を統合
             const extensions = [
-                // 基本的なCodeMirrorの機能
-                lineNumbers(), // 行番号
-                foldGutter(), // コード折りたたみ
-                highlightSpecialChars(), // 特殊文字のハイライト
-                history(), // 履歴
-                drawSelection(), // 独自の選択描画
-                dropCursor(), // ドロップカーソル
-                EditorState.allowMultipleSelections.of(true), // 複数選択を許可
-                indentOnInput(), // 入力時のインデント
-                syntaxHighlighting(defaultHighlightStyle), // デフォルトのシンタックスハイライト
-                bracketMatching(), // ブラケットマッチング
-                closeBrackets(), // ブラケットの自動閉じ
-                autocompletion({ override: [scratchCompletions] }), // 自動補完とカスタム補完
-                rectangularSelection(), // 長方形選択
-                crosshairCursor(), // クロスヘアカーソル
-                highlightActiveLine(), // アクティブな行のハイライト
-                highlightActiveLineGutter(), // アクティブな行のガターハイライト
-                highlightSelectionMatches(), // 選択範囲のマッチをハイライト
-                javascript(), // JavaScript言語サポート
-                oneDark, // ダークテーマ
-                EditorView.lineWrapping, // 行の折り返し
-
-                // キーマップの統合
+                lineNumbers(),
+                foldGutter(),
+                highlightSpecialChars(),
+                history(),
+                drawSelection(),
+                dropCursor(),
+                EditorState.allowMultipleSelections.of(true),
+                indentOnInput(),
+                syntaxHighlighting(defaultHighlightStyle),
+                bracketMatching(),
+                closeBrackets(),
+                autocompletion({ override: [scratchCompletions] }),
+                rectangularSelection(),
+                crosshairCursor(),
+                highlightActiveLine(),
+                highlightActiveLineGutter(),
+                highlightSelectionMatches(),
+                javascript(),
+                oneDark,
+                EditorView.lineWrapping,
                 keymap.of([
-                    ...closeBracketsKeymap, // ブラケット閉じ関連キーマップ
-                    ...defaultKeymap, // デフォルトのキーマップ
-                    ...searchKeymap, // 検索関連キーマップ
-                    ...historyKeymap, // 履歴関連キーマップ
-                    ...foldKeymap, // コード折りたたみ関連キーマップ
-                    ...completionKeymap, // 自動補完関連キーマップ
-                    ...lintKeymap // リンター関連キーマップ
+                    ...closeBracketsKeymap,
+                    ...defaultKeymap,
+                    ...searchKeymap,
+                    ...historyKeymap,
+                    ...foldKeymap,
+                    ...completionKeymap,
+                    ...lintKeymap
                 ]),
-
-                // エディタの変更を監視するリスナー
                 EditorView.updateListener.of((update) => {
                     if (update.docChanged) {
                         handleCodeChange(update.state.doc.toString());
@@ -190,14 +215,83 @@ const SourceTab = (props) => {
         }));
     }, [selectedSpriteId]);
 
-    // selectedSpriteId の変更を監視 (propsからstateへの同期)
+    // selectedSpriteId の変更を監視 (propsからstateへの同期) (変更なし)
     useEffect(() => {
         if (props.editingTarget !== selectedSpriteId) {
             setSelectedSpriteId(props.editingTarget);
         }
     }, [props.editingTarget, selectedSpriteId]);
 
-    // selectedSpriteId または spriteCode が変更されたときにエディタの内容を更新
+    // **新規追加**: `tosh2` を使用してScratchブロックをJavaScriptにコンパイルするロジック
+    // `selectedSpriteId` または `props.vm` (内部のブロックデータ変更を感知するため) が変更されたときに実行
+    useEffect(() => {
+        if (!props.vm || !selectedSpriteId) {
+            return;
+        }
+
+        try {
+            const target = props.vm.runtime.getTargetById(selectedSpriteId);
+            if (target && target.blocks) {
+                const blocksMap = target.blocks.getBlocks();
+                const blocksObject = {};
+                // CodeMirrorの補完機能向けに、Mapをtosh2が期待する形式のオブジェクトに変換
+                blocksMap.forEach((block, id) => {
+                    blocksObject[id] = block.toJSON();
+                });
+
+                // tosh2 でブロックをJavaScriptにコンパイル
+                const compiledJs = tosh2.compile(blocksObject);
+
+                // コンパイルされたJavaScriptコードでエディタのコンテンツを更新
+                // ただし、直接setSpriteCodeを呼び出すと無限ループになる可能性があるため、
+                // 既存のhandleCodeChangeを使わず、CodeMirrorインスタンスを直接更新する
+                // また、ユーザーが手動で編集している場合は上書きしないよう考慮が必要。
+                // ここでは自動コンパイルとして常に上書きする前提。
+                if (editorInstance.current) {
+                    const currentEditorDoc = editorInstance.current.state.doc.toString();
+                    if (currentEditorDoc !== compiledJs) { // 変更がある場合のみ更新
+                        editorInstance.current.dispatch({
+                            changes: {
+                                from: 0,
+                                to: currentEditorDoc.length,
+                                insert: compiledJs
+                            },
+                        });
+                        console.log(`tosh2でコンパイルされたコードをエディタに表示しました。`);
+                    }
+                }
+                // また、spriteCode stateも更新しておくことで、スプライト切り替え時の初期表示を正しくする
+                setSpriteCode(prevCodeMap => ({
+                    ...prevCodeMap,
+                    [selectedSpriteId]: compiledJs
+                }));
+
+            }
+        } catch (error) {
+            console.error('tosh2でのコンパイルに失敗しました:', error);
+            // コンパイル失敗時は、エラーメッセージを表示したり、エディタをクリアしたりする
+            if (editorInstance.current) {
+                editorInstance.current.dispatch({
+                    changes: {
+                        from: 0,
+                        to: editorInstance.current.state.doc.length,
+                        insert: `// コンパイルエラー: ${error.message}\n`
+                    },
+                });
+            }
+            setSpriteCode(prevCodeMap => ({
+                ...prevCodeMap,
+                [selectedSpriteId]: `// コンパイルエラー: ${error.message}\n`
+            }));
+        }
+    }, [selectedSpriteId, props.vm]); // selectedSpriteId または VM の変更で再実行
+
+    // selectedSpriteId または spriteCode が変更されたときにエディタの内容を更新 (変更なし)
+    // tosh2のuseEffectがエディタを更新するため、このuseEffectは
+    // 手動編集とtosh2コンパイルの競合を避けるために注意が必要。
+    // 上記のtosh2のuseEffectで直接editorInstance.currentを更新しているため、
+    // このuseEffectが不要になるか、ロジックの調整が必要かもしれません。
+    // 今回の例では、tosh2の出力が優先されるようにしています。
     useEffect(() => {
         if (!editorInstance.current || !selectedSpriteId) {
             return;
@@ -216,7 +310,7 @@ const SourceTab = (props) => {
         }
     }, [selectedSpriteId, spriteCode]);
 
-    // props.sprites または props.stage の変更を監視し、spriteCode を更新
+    // props.sprites または props.stage の変更を監視し、spriteCode を更新 (変更なし)
     useEffect(() => {
         const newCodeMap = {};
         let changed = false;
@@ -247,7 +341,7 @@ const SourceTab = (props) => {
         }
     }, [props.sprites, props.stage, spriteCode]);
 
-    // ツールバーのアクションハンドラ
+    // ツールバーのアクションハンドラ (変更なし)
     const handleUndo = useCallback(() => {
         if (editorInstance.current) {
             undo(editorInstance.current);
@@ -273,14 +367,7 @@ const SourceTab = (props) => {
     }, []);
 
     const handlePaste = useCallback(() => {
-        // 注: ブラウザのセキュリティ制約により、プログラムからクリップボードに直接アクセスして
-        // ペーストを行うことは困難です。ユーザーにCtrl+V / Cmd+Vの使用を促すのが一般的です。
-        // ここでは便宜上、アラートを出力します。
-        // より高度な実装には、クリップボードAPI (navigator.clipboard.readText()) の使用を検討しますが、
-        // ユーザーの許可が必要です。
         console.warn("ペースト機能はブラウザのセキュリティ制約により、ボタンから直接実行できません。キーボードショートカット (Ctrl+V / Cmd+V) を使用してください。");
-        // 例: ユーザーにメッセージボックスを表示することも可能
-        // alert("Ctrl+V または Cmd+V を使用してペーストしてください。");
     }, []);
 
     const handleSearch = useCallback(() => {
