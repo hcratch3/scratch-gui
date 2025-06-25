@@ -34,7 +34,8 @@ import { activateTab, SOURCE_TAB_INDEX } from '../reducers/editor-tab';
 import { setRestore } from '../reducers/restore-deletion';
 import errorBoundaryHOC from '../lib/error-boundary-hoc.jsx';
 
-// --- decompileBlockToJs 関数は、今回は直接使用しませんが、削除せず残しておきます ---
+// --- フェーズ1: ブロック -> コード (デコンパイラ) ロジック ---
+
 /**
  * Scratch 3.0のブロックデータをJavaScript風のコードに変換するデコンパイラ。
  * これは簡略化された実装であり、全てのブロックタイプや複雑な構造に対応するものではありません。
@@ -83,8 +84,10 @@ const decompileBlockToJs = (blocksMap, startBlockId, indentLevel = 0) => {
             return JSON.stringify(input.fields.VARIABLE.value); // 変数の名前を文字列として取得
         }
         // デフォルトのフィールド値（数字、文字列など）
-        if (input.value !== undefined) { // フィールドの直接的な値 (例: motion_movestepsのステップ数)
-            return JSON.stringify(input.value); // 数値も文字列として扱えるようJSON.stringify
+        // Scratch 3.0の数値ブロックの場合、input.valueではなくconnectedBlock.fields.NUM.valueを見る必要がある
+        // decompileBlockToJs内でmath_numberが既に処理されるため、ここでは文字列化のみ
+        if (input.value !== undefined) { 
+            return JSON.stringify(input.value); 
         }
         return 'null'; // 解決できない場合はnull
     };
@@ -134,7 +137,7 @@ const decompileBlockToJs = (blocksMap, startBlockId, indentLevel = 0) => {
 
             // --- 動きブロック ---
             case 'motion_movesteps':
-                line += `move(${resolveInput(inputs.STEPS)}) steps;`;
+                line += `move(${resolveInput(inputs.STEPS)}) steps;`; // stepsを省略
                 break;
             case 'motion_turnright':
                 line += `turnRight(${resolveInput(inputs.DEGREES)}) degrees;`;
@@ -284,6 +287,9 @@ const decompileBlockToJs = (blocksMap, startBlockId, indentLevel = 0) => {
                 break;
             case 'motion_direction':
                 line += `direction`; // レポーターブロック
+                break;
+            case 'math_number': // ★math_numberブロックの処理を追加
+                line += `${resolveField(fields.NUM)}`;
                 break;
 
             default:
@@ -462,7 +468,8 @@ const SourceTab = (props) => {
         }
     }, [props.editingTarget, selectedSpriteId]);
 
-    // ★修正: Scratch 3.0ブロックデータをそのままコンソールログに出力するロジック
+    // Scratch 3.0ブロックをJavaScript風コードに「変換」して表示するロジック
+    // フェーズ1: ブロック -> コード (デコンパイラ)
     useEffect(() => {
         if (!props.vm || !selectedSpriteId) {
             return;
@@ -473,90 +480,87 @@ const SourceTab = (props) => {
             if (target && target.blocks) {
                 const blocksMap = target.blocks._blocks; 
                 
-                // blocksMapの形式をチェックし、適切にログに出力
+                let allBlocks = [];
+                // blocksMapがMapインスタンスかどうかを確認し、適切に値を抽出
                 if (blocksMap instanceof Map) {
-                    console.log("--- Raw Blocks Data (Map) ---");
-                    console.log(blocksMap); // Mapオブジェクトをそのままログ
-                    // MapをJSON文字列に変換してログ出力 (見やすいように)
-                    const blocksObject = {};
-                    blocksMap.forEach((block, id) => {
-                        blocksObject[id] = block.toJSON();
-                    });
-                    console.log("--- Raw Blocks Data (JSON Stringified) ---");
-                    console.log(JSON.stringify(blocksObject, null, 2));
-                    console.log("----------------------------");
-                    
-                    // CodeMirrorには情報を出力した旨のメッセージを表示
-                    if (editorInstance.current) {
-                        const message = '// Scratch VMのブロックデータがコンソールにログ出力されました。\n// Please open your browser\'s developer console (F12) to view the raw block data.';
-                        const currentEditorDoc = editorInstance.current.state.doc.toString();
-                        if (currentEditorDoc !== message) {
-                            editorInstance.current.dispatch({
-                                changes: {
-                                    from: 0,
-                                    to: currentEditorDoc.length,
-                                    insert: message
-                                },
-                            });
-                        }
-                    }
-
+                    allBlocks = Array.from(blocksMap.values());
                 } else if (typeof blocksMap === 'object' && blocksMap !== null) {
-                    console.log("--- Raw Blocks Data (Plain Object) ---");
-                    console.log(blocksMap); // プレーンオブジェクトをそのままログ
-                    console.log("--- Raw Blocks Data (JSON Stringified) ---");
-                    console.log(JSON.stringify(blocksMap, null, 2));
-                    console.log("----------------------------");
-
-                    // CodeMirrorには情報を出力した旨のメッセージを表示
-                    if (editorInstance.current) {
-                        const message = '// Scratch VMのブロックデータがコンソールにログ出力されました。\n// Please open your browser\'s developer console (F12) to view the raw block data.';
-                        const currentEditorDoc = editorInstance.current.state.doc.toString();
-                        if (currentEditorDoc !== message) {
-                            editorInstance.current.dispatch({
-                                changes: {
-                                    from: 0,
-                                    to: currentEditorDoc.length,
-                                    insert: message
-                                },
-                            });
-                        }
-                    }
-
+                    // Mapではないがオブジェクトの場合（例: 単なるJSONオブジェクト）、Object.valuesを使用
+                    allBlocks = Object.values(blocksMap);
                 } else {
                     console.warn("blocksMapはMapでもプレーンなオブジェクトでもありません:", blocksMap);
                     const errorMessage = `// エラー: ブロックデータが予期せぬ形式です。\n// 詳細: blocksMapがMapでもオブジェクトでもありません。\n// コンソールを確認してください。`;
                     if (editorInstance.current) {
-                        const currentEditorDoc = editorInstance.current.state.doc.toString();
-                        if (currentEditorDoc !== errorMessage) {
-                            editorInstance.current.dispatch({
-                                changes: {
-                                    from: 0,
-                                    to: currentEditorDoc.length,
-                                    insert: errorMessage
-                                },
-                            });
-                        }
+                        editorInstance.current.dispatch({
+                            changes: {
+                                from: 0,
+                                to: editorInstance.current.state.doc.length,
+                                insert: errorMessage
+                            },
+                        });
+                    }
+                    setSpriteCode(prevCodeMap => ({
+                        ...prevCodeMap,
+                        [selectedSpriteId]: errorMessage
+                    }));
+                    return; // 処理を中断
+                }
+
+
+                let generatedCode = '';
+                // スクリプトの開始ブロック（ハットブロック）を探す
+                // Scratch 3.0 VMのブロックは、スクリプトごとに先頭ブロックのIDを持つわけではないため、
+                // ブロックMapを走査してparentがnullのブロック（独立したスクリプトの開始ブロック）を見つけます。
+                const topLevelBlocks = allBlocks.filter(
+                    block => block.topLevel && !block.parent
+                );
+
+                topLevelBlocks.forEach(block => {
+                    generatedCode += decompileBlockToJs(blocksMap, block.id, 0) + '\n';
+                });
+
+                // 生成されたコードが空の場合は、エラーメッセージをクリア
+                if (generatedCode.trim() === '') {
+                    generatedCode = '// スクリプトがありません。ブロックを追加してください。';
+                }
+
+                if (editorInstance.current) {
+                    const currentEditorDoc = editorInstance.current.state.doc.toString();
+                    if (currentEditorDoc !== generatedCode) { // 変更がある場合のみ更新
+                        editorInstance.current.dispatch({
+                            changes: {
+                                from: 0,
+                                to: currentEditorDoc.length,
+                                insert: generatedCode
+                            },
+                        });
+                        console.log(`Scratch 3.0のブロックをJavaScript風コードにデコンパイルしました。`);
                     }
                 }
-            }
-        } catch (error) {
-            console.error('ブロックデータの取得またはログ出力中にエラーが発生しました:', error);
-            const errorMessage = `// エラー: ブロックデータの取得またはログ出力中にエラーが発生しました。\n// 詳細: ${error.message}\n// コンソールを確認してください。`;
-            if (editorInstance.current) {
-                const currentEditorDoc = editorInstance.current.state.doc.toString();
-                if (currentEditorDoc !== errorMessage) {
+                setSpriteCode(prevCodeMap => ({
+                    ...prevCodeMap,
+                    [selectedSpriteId]: generatedCode
+                }));
+
+            } } catch (error) {
+                console.error('ブロックデータのデコンパイル中にエラーが発生しました:', error);
+                const errorMessage = `// エラー: ブロックデータのデコンパイルに失敗しました。\n// 詳細: ${error.message}\n// 現在はデコンパイルされたJSONデータが表示されています。`;
+                if (editorInstance.current) {
                     editorInstance.current.dispatch({
                         changes: {
                             from: 0,
-                            to: currentEditorDoc.length,
+                            to: editorInstance.current.state.doc.length,
                             insert: errorMessage
                         },
                     });
                 }
+                setSpriteCode(prevCodeMap => ({
+                    ...prevCodeMap,
+                    [selectedSpriteId]: errorMessage
+                }));
             }
         }
-    }, [selectedSpriteId, props.vm]); 
+    , [selectedSpriteId, props.vm]); // props.vm を依存配列に含めることでVMの変化を捉える
 
     // Update editor content when selectedSpriteId or spriteCode changes (unchanged)
     // このuseEffectは、デコンパイラによる自動更新と競合する可能性があるため、
