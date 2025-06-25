@@ -10,34 +10,34 @@ const backslashes = s => s.replace(/\\["\\]/g, x => x[1])
 
 let lexer = moo.compile([
   {name: 'NL',      match: '\n', lineBreaks: true, type: 'NL' },
-  {name: 'WS',      match: /[ \t]+/},
-  {name: 'ellips',  match: /\.{3}/},
-  {name: 'comment', match: /\/{2}(?:.*)$/, value: x => x.slice(2)},
-  {name: 'false',   match: '<>'},
-  {name: 'zero',    match: '()'},
-  {name: 'empty',   match: '_'},
-  {name: 'number',  match: /[0-9]+(?:\.[0-9]+)?e-?[0-9]+/}, // 123[.123]e[-]123
-  {name: 'number',  match: /(?:0|[1-9][0-9]*)?\.[0-9]+/},   // [123].123
-  {name: 'number',  match: /(?:0|[1-9][0-9]*)\.[0-9]*/},    // 123.[123]
-  {name: 'number',  match: /0|[1-9][0-9]*/},              // 123
-  {name: 'color',   match: /#[A-Fa-f0-9]{3}(?:[A-Fa-f0-9]{3})?/, value: x => x.slice(1)},
+  {name: 'WS',      match: /[ \t]+/, type: 'WS' },
+  {name: 'ellips',  match: /\.{3}/, type: 'ellipsL' },
+  {name: 'comment', match: /\/{2}(?:.*)$/, value: x => x.slice(2), type: 'comment' },
+  {name: 'false',   match: '<>', type: 'false' },
+  {name: 'zero',    match: '()', type: 'zero' },
+  {name: 'empty',   match: '_', type: 'empty' },
+  {name: 'number',  match: /[0-9]+(?:\.[0-9]+)?e-?[0-9]+/, type: 'number' }, // 123[.123]e[-]123
+  {name: 'number',  match: /(?:0|[1-9][0-9]*)?\.[0-9]+/, type: 'number' },   // [123].123
+  {name: 'number',  match: /(?:0|[1-9][0-9]*)\.[0-9]*/, type: 'number' },    // 123.[123]
+  {name: 'number',  match: /0|[1-9][0-9]*/, type: 'number' },              // 123
+  {name: 'color',   match: /#[A-Fa-f0-9]{3}(?:[A-Fa-f0-9]{3})?/, value: x => x.slice(1), type: 'color' },
   // strings are backslash-escaped
-  {name: 'string',  match: /"(?:(?:\\["\\]|[^\n"\\])*)"/, value: x => x.slice(1, -1)},
-  {name: 'string',  match: /'(?:(?:\\['\\]|[^\n'\\])*)'/, value: x => x.slice(1, -1)},
-  {name: 'lparen',  match: '('},
-  {name: 'rparen',  match: ')'},
-  {name: 'langle',  match: '<'},
-  {name: 'rangle',  match: '>'},
-  {name: 'lsquare', match: '['},
-  {name: 'rsquare', match: ']'},
-  {name: '{',       match: '{'},
-  {name: '}',       match: '}'},
-  {name: 'cloud',   match: /[☁]/},
-  {name: 'input',   match: /%[a-z](?:\.[a-zA-Z]+)?/},
-  {name: 'symbol',  match: /[-%#+*/=^,?]/},                // single character
-  {name: 'symbol',  match: /[_A-Za-z][-_A-Za-z0-9:',.]*/}, // word, as in a block
-  {name: 'iden',    match: /[^\n \t"'()<>=*\/+-]+/},     // user-defined names
-  {name: 'ERROR',   error: true},
+  {name: 'string',  match: /"(?:(?:\\["\\]|[^\n"\\])*)"/, value: x => x.slice(1, -1), type: 'string' },
+  {name: 'string',  match: /'(?:(?:\\['\\]|[^\n'\\])*)'/, value: x => x.slice(1, -1), type: 'string' },
+  {name: 'lparen',  match: '(', type: 'lparen' },
+  {name: 'rparen',  match: ')', type: 'lparen' },
+  {name: 'langle',  match: '<', type: 'langle' },
+  {name: 'rangle',  match: '>', type: 'langle' },
+  {name: 'lsquare', match: '[', type: 'lsquare' },
+  {name: 'rsquare', match: ']', type: 'lsquare' },
+  {name: '{',       match: '{', type: '{' },
+  {name: '}',       match: '}', type: '}' },
+  {name: 'cloud',   match: /[☁]/, type: 'cloud' },
+  {name: 'input',   match: /%[a-z](?:\.[a-zA-Z]+)?/, type: 'input' },
+  {name: 'symbol',  match: /[-%#+*/=^,?]/, type: 'symbol' },                // single character
+  {name: 'symbol',  match: /[_A-Za-z][-_A-Za-z0-9:',.]*/, type: 'symbol' }, // word, as in a block
+  {name: 'iden',    match: /[^\n \t"'()<>=*\/+-]+/, type: 'iden' },     // user-defined names
+  {name: 'ERROR',   error: true, type: 'ERROR' },
 ])
 
 
