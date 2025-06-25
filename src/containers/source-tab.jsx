@@ -27,6 +27,7 @@ import {
 import {lintKeymap} from "@codemirror/lint";
 
 import { javascript } from "@codemirror/lang-javascript";
+// テーマのインポートは削除済み
 
 import styles from '../components/source/source.css';
 import VM from 'scratch-vm';
@@ -56,6 +57,21 @@ const SourceTab = (props) => {
 
     const [selectedSpriteId, setSelectedSpriteId] = useState(props.editingTarget);
     
+    // カスタムメッセージボックスの状態
+    const [messageBoxVisible, setMessageBoxVisible] = useState(false);
+    const [messageBoxContent, setMessageBoxContent] = useState('');
+
+    const showMessageBox = useCallback((message) => {
+        setMessageBoxContent(message);
+        setMessageBoxVisible(true);
+    }, []);
+
+    const hideMessageBox = useCallback(() => {
+        setMessageBoxVisible(false);
+        setMessageBoxContent('');
+    }, []);
+
+
     // Scratchブロックに対応するカスタム補完項目を定義 (外部ファイルからインポート)
     const scratchCompletions = useCallback((context) => {
         const word = context.matchBefore(/\w*/);
@@ -74,7 +90,7 @@ const SourceTab = (props) => {
     }, []);
 
 
-    // エディタの初期化とクリーンアップ (変更なし)
+    // エディタの初期化とクリーンアップ
     useEffect(() => {
         const initializeEditor = () => {
             if (!editorRef.current) {
@@ -287,7 +303,7 @@ const SourceTab = (props) => {
         }
     }, [props.sprites, props.stage, spriteCode]);
 
-    // Toolbar action handlers (変更なし)
+    // Toolbar action handlers
     const handleUndo = useCallback(() => {
         if (editorInstance.current) {
             undo(editorInstance.current);
@@ -300,21 +316,136 @@ const SourceTab = (props) => {
         }
     }, []);
 
+    // コピー機能
     const handleCopy = useCallback(() => {
         if (editorInstance.current) {
-            copySelected(editorInstance.current);
-        }
-    }, []);
+            const editorView = editorInstance.current;
+            const selection = editorView.state.selection.main;
+            const selectedText = editorView.state.doc.sliceString(selection.from, selection.to);
 
+            if (selectedText.length > 0) {
+                const tempTextArea = document.createElement('textarea');
+                tempTextArea.value = selectedText;
+                document.body.appendChild(tempTextArea);
+                tempTextArea.select();
+                try {
+                    document.execCommand('copy');
+                    showMessageBox('選択されたテキストをコピーしました。');
+                } catch (err) {
+                    console.error('コピーに失敗しました:', err);
+                    showMessageBox('コピーに失敗しました。ブラウザのセキュリティ設定を確認してください。');
+                } finally {
+                    document.body.removeChild(tempTextArea);
+                }
+            } else {
+                showMessageBox('コピーするテキストが選択されていません。');
+            }
+        }
+    }, [showMessageBox]);
+
+    // カット機能
     const handleCut = useCallback(() => {
         if (editorInstance.current) {
-            cutSelected(editorInstance.current);
-        }
-    }, []);
+            const editorView = editorInstance.current;
+            const selection = editorView.state.selection.main;
+            const selectedText = editorView.state.doc.sliceString(selection.from, selection.to);
 
-    const handlePaste = useCallback(() => {
-        console.warn("ペースト機能はブラウザのセキュリティ制約により、ボタンから直接実行できません。キーボードショートカット (Ctrl+V / Cmd+V) を使用してください。");
-    }, []);
+            if (selectedText.length > 0) {
+                const tempTextArea = document.createElement('textarea');
+                tempTextArea.value = selectedText;
+                document.body.appendChild(tempTextArea);
+                tempTextArea.select();
+                let copiedSuccessfully = false;
+                try {
+                    copiedSuccessfully = document.execCommand('copy');
+                } catch (err) {
+                    console.error('カット（コピー部分）に失敗しました:', err);
+                } finally {
+                    document.body.removeChild(tempTextArea);
+                }
+
+                if (copiedSuccessfully) {
+                    editorView.dispatch({
+                        changes: {
+                            from: selection.from,
+                            to: selection.to,
+                            insert: ''
+                        }
+                    });
+                    showMessageBox('選択されたテキストをカットしました。');
+                } else {
+                    showMessageBox('カット（コピー部分）に失敗しました。');
+                }
+            } else {
+                showMessageBox('カットするテキストが選択されていません。');
+            }
+        }
+    }, [showMessageBox]);
+
+    // ペースト機能
+    const handlePaste = useCallback(async () => {
+        if (editorInstance.current) {
+            const editorView = editorInstance.current;
+            try {
+                const text = await navigator.clipboard.readText();
+                if (text) {
+                    const changes = editorView.state.changeByRange(range => ({
+                        changes: { from: range.from, to: range.to, insert: text },
+                        range: { from: range.from + text.length, to: range.from + text.length }
+                    }));
+                    editorView.dispatch(changes);
+                    showMessageBox('テキストをペーストしました。');
+                } else {
+                    showMessageBox('クリップボードにテキストがありません。');
+                }
+            } catch (err) {
+                console.error('ペーストに失敗しました:', err);
+                showMessageBox('ペーストに失敗しました。クリップボードへのアクセスが許可されているか確認してください。');
+            }
+        }
+    }, [showMessageBox]);
+
+    // 新規追加: 削除機能
+    const handleDelete = useCallback(() => {
+        if (editorInstance.current) {
+            const editorView = editorInstance.current;
+            const selection = editorView.state.selection.main;
+
+            if (!selection.empty) { // 選択範囲がある場合
+                editorView.dispatch({
+                    changes: {
+                        from: selection.from,
+                        to: selection.to,
+                        insert: ''
+                    }
+                });
+                showMessageBox('選択されたテキストを削除しました。');
+            } else { // 選択範囲がない場合、すべてのテキストを削除
+                editorView.dispatch({
+                    changes: {
+                        from: 0,
+                        to: editorView.state.doc.length,
+                        insert: ''
+                    }
+                });
+                showMessageBox('エディタのすべてのコンテンツを削除しました。');
+            }
+        }
+    }, [showMessageBox]);
+
+    // 新規追加: チェック機能 (現時点ではデモンストレーション)
+    const handleCheck = useCallback(() => {
+        if (editorInstance.current) {
+            const currentCode = editorInstance.current.state.doc.toString();
+            console.log("--- コードのチェックを実行中 ---");
+            console.log("チェック対象コード:\n", currentCode);
+            // ここに実際のコード解析（例: リンティング、簡易構文チェック）ロジックを実装します。
+            // 現時点では、単純なメッセージを表示します。
+            showMessageBox('コードのチェックを実行しました。詳細はコンソールを確認してください。');
+            console.log("----------------------------");
+        }
+    }, [showMessageBox]);
+
 
     const handleSearch = useCallback(() => {
         if (editorInstance.current) {
@@ -341,7 +472,7 @@ const SourceTab = (props) => {
         }
     }, []);
 
-    // コードをブロックに変換するハンドラ (限定的なデモンストレーション) (変更なし)
+    // コードをブロックに変換するハンドラ (限定的なデモンストレーション)
     const handleCompileToBlocks = useCallback(() => {
         if (editorInstance.current && props.vm) {
             const currentCode = editorInstance.current.state.doc.toString();
@@ -354,15 +485,15 @@ const SourceTab = (props) => {
                     })
                     .catch(e => {
                         console.error("Scratchプロジェクトのロードに失敗しました:", e);
-                        alert(`プロジェクトのロードに失敗しました。\nエラー: ${e.message}\nエディタの内容が有効なScratchプロジェクトJSONであることを確認してください。`);
+                        showMessageBox(`プロジェクトのロードに失敗しました。\nエラー: ${e.message}\nエディタの内容が有効なScratchプロジェクトJSONであることを確認してください。`);
                     });
 
             } catch (e) {
                 console.error("CodeMirrorの内容が有効なJSONではありません:", e);
-                alert(`コードをブロックに変換できませんでした。\nエラー: ${e.message}\n有効なJSON形式のScratchプロジェクトデータが入力されているか確認してください。`);
+                showMessageBox(`コードをブロックに変換できませんでした。\nエラー: ${e.message}\n有効なJSON形式のScratchプロジェクトデータが入力されているか確認してください。`);
             }
         }
-    }, [props.vm]);
+    }, [props.vm, showMessageBox]);
 
 
     if (!props.vm.editingTarget) {
@@ -376,70 +507,111 @@ const SourceTab = (props) => {
             onMouseDown={props.onContainerClick}
         >
             {/* ツールバーコンテナ */}
-            <div className="flex justify-center p-3 space-x-2 bg-gray-700 rounded-t-lg shadow-md">
+            {/* Tailwindクラスを削除し、styles.buttonGroupを使用 */}
+            <div className={styles.buttonGroup}>
                 <button
+                    className={styles.button} // styles.button クラスを使用
                     onClick={handleSearch}
-                    className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md shadow-sm transition-colors duration-200"
                     title="検索 (Ctrl+F)"
                 >
+                    <svg className={styles.icon} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                     検索
                 </button>
                 <button
+                    className={styles.button}
                     onClick={handleCopy}
-                    className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md shadow-sm transition-colors duration-200"
                     title="コピー (Ctrl+C)"
                 >
+                    <svg className={styles.icon} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
                     コピー
                 </button>
                 <button
+                    className={styles.button}
                     onClick={handleCut}
-                    className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md shadow-sm transition-colors duration-200"
                     title="カット (Ctrl+X)"
                 >
+                    <svg className={styles.icon} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3"></circle><path d="M8.12 8.12 12 12"></path><path d="M20 4 8.12 15.88"></path><circle cx="6" cy="18" r="3"></circle><path d="M14.8 14.8 20 20"></path></svg>
                     カット
                 </button>
                 <button
+                    className={styles.button}
                     onClick={handlePaste}
-                    className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md shadow-sm transition-colors duration-200"
                     title="ペースト (Ctrl+V / Cmd+V)"
                 >
+                    <svg className={styles.icon} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
                     ペースト
                 </button>
                 <button
+                    className={styles.button}
+                    onClick={handleDelete} // 新しい削除ハンドラ
+                    title="削除 (選択範囲を削除、または全削除)"
+                >
+                    <svg className={styles.icon} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 4H8l-7 16 7 16h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"></path><line x1="10" y1="9" x2="18" y2="17"></line><line x1="18" y1="9" x2="10" y2="17"></line></svg>
+                    削除
+                </button>
+                <button
+                    className={styles.button}
                     onClick={handleUndo}
-                    className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md shadow-sm transition-colors duration-200"
+                    // disabled={!props.canUndo} // このpropsは現在定義されていないため削除
                     title="戻る (Ctrl+Z)"
                 >
+                    <svg className={styles.icon} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V6l3 3"></path><path d="M12 6l-3 3"></path></svg>
                     戻る
                 </button>
                 <button
+                    className={styles.button}
                     onClick={handleRedo}
-                    className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md shadow-sm transition-colors duration-200"
+                    // disabled={!props.canRedo} // このpropsは現在定義されていないため削除
                     title="進む (Ctrl+Shift+Z)"
                 >
+                    <svg className={styles.icon} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v13l-3-3"></path><path d="M12 18l3-3"></path></svg>
                     進む
                 </button>
                 <button
+                    className={`${styles.button} ${styles.runButton}`}
                     onClick={handleRunCompiledCode}
-                    className="p-2 bg-green-500 hover:bg-green-600 text-white rounded-md shadow-sm transition-colors duration-200 ml-4"
-                    title="コンパイルされたコードを実行 (コンソールに出力)"
+                    title="コードを実行 (コンソールに出力)"
                 >
+                    <svg className={styles.icon} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
                     コードを実行
                 </button>
-                {/* 新規追加: コードをブロックに変換するボタン */}
                 <button
+                    className={`${styles.button} ${styles.compileButton}`}
                     onClick={handleCompileToBlocks}
-                    className="p-2 bg-purple-500 hover:bg-purple-600 text-white rounded-md shadow-sm transition-colors duration-200"
                     title="コードをブロックに変換 (ScratchプロジェクトJSONとしてロード)"
                 >
+                    <svg className={styles.icon} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
                     ブロックに変換
+                </button>
+                 <button
+                    className={styles.button}
+                    onClick={handleCheck} // 新しいチェックハンドラ
+                    title="コードをチェック"
+                >
+                    <svg className={styles.icon} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    チェック
                 </button>
             </div>
 
             {/* CodeMirrorエディタをマウントする場所 */}
-            <div style={{ height: 'calc(100% - 50px)', width: '100%' }} className="rounded-b-lg overflow-hidden">
-                <div ref={editorRef} className="codemirror-container w-full h-full" />
+            <div style={{ height: 'calc(100% - 50px)', width: '100%' }} className={styles.editorContainer}>
+                <div ref={editorRef} className={styles.codemirrorContainer} />
             </div>
+
+            {/* カスタムメッセージボックス */}
+            {messageBoxVisible && (
+                <div className={styles.messageBoxOverlay}>
+                    <div className={styles.messageBox}>
+                        <p className={styles.messageBoxContent}>{messageBoxContent}</p>
+                        <button
+                            onClick={hideMessageBox}
+                            className={styles.messageBoxButton}
+                        >
+                            OK
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
@@ -450,14 +622,14 @@ SourceTab.propTypes = {
     stage: PropTypes.object,
     setRef: PropTypes.func,
     onContainerClick: PropTypes.func.isRequired,
-    vm: PropTypes.instanceOf(VM).isRequired
+    vm: PropTypes.instanceOf(VM).isRequired,
 };
 
 const mapStateToProps = (state) => ({
     editingTarget: state.scratchGui.targets.editingTarget,
     sprites: state.scratchGui.targets.sprites,
     stage: state.scratchGui.targets.stage,
-    vm: state.scratchGui.vm
+    vm: state.scratchGui.vm,
 });
 
 export default errorBoundaryHOC('Source Tab')(
