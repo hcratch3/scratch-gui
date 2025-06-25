@@ -41,7 +41,7 @@ import itt from 'itt'; // ittはdefault exportを想定
 // 例: const grammar = nearley.Grammar.fromCompiled(require('./src/lib/tosh_grammar/grammar'));
 // しかし、React/Webpack環境ではimport文を使うのが一般的です。
 // grammar.js がコンパイル済みJavaScriptファイルであると仮定
-import toshGrammarCompiled from '../lib/tosh_grammar/grammar'; // <-- ★要修正: grammar.jsの実際のパスに合わせる
+import toshGrammarCompiled from '../lib/tosh/grammar'; // <-- ★要修正: grammar.jsの実際のパスに合わせる
 const grammar = nearley.Grammar.fromCompiled(toshGrammarCompiled);
 
 // toshのgenerate関数を直接移植
