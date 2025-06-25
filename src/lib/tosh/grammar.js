@@ -9,7 +9,7 @@ const moo = require('moo')
 const backslashes = s => s.replace(/\\["\\]/g, x => x[1])
 
 let lexer = moo.compile([
-  {name: 'NL',      match: '\n', lineBreaks: true },
+  {name: 'NL',      match: '\n', lineBreaks: true, type: 'NL' },
   {name: 'WS',      match: /[ \t]+/},
   {name: 'ellips',  match: /\.{3}/},
   {name: 'comment', match: /\/{2}(?:.*)$/, value: x => x.slice(2)},
