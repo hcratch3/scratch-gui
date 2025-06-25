@@ -1,68 +1,135 @@
-@import "../../css/colors.css";
-@import "../../css/units.css";
-/* uiw/react-codemirror が内部でインポートしてくれる可能性もあるが、
-   念のため、CodeMirror の基本スタイルは明示的にインポートしておくのが安全 */
-/* @import '@codemirror/view/dist/codemirror.css'; */
+/* src/components/source/source.css の例 */
 
 .source {
     display: flex;
     flex-direction: column;
-    flex-grow: 1;
     height: 100%;
     width: 100%;
-    box-sizing: border-box;
-    background-color: white;
-    padding: calc(2 * $space);
+    background-color: #333; /* 背景色 */
+    border-radius: 8px; /* 角丸 */
+    overflow: hidden; /* 子要素がはみ出さないように */
 }
 
-.toolbar {
-    padding: 8px;
-    background-color: #f0f0f0;
-    border-bottom: 1px solid #ccc;
+.buttonGroup {
     display: flex;
-    gap: 8px;
+    justify-content: center;
+    padding: 12px; /* p-3 に相当 */
+    gap: 8px; /* space-x-2 に相当 */
+    background-color: #4A4A4A; /* bg-gray-700 に相当 */
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* shadow-md に相当 */
+}
+
+.button {
+    display: flex;
     align-items: center;
-}
-
-.toolbar button {
-    padding: 6px 12px;
-    border: 1px solid #bbb;
-    border-radius: 4px;
-    background-color: #e0e0e0;
+    justify-content: center;
+    padding: 8px 12px; /* px-3 py-2 に相当 */
+    background-color: #007bff; /* blue-500 に相当 */
+    color: white;
+    border-radius: 6px; /* rounded-md に相当 */
+    border: none;
     cursor: pointer;
-    font-size: 0.9em;
+    font-size: 14px;
+    transition: background-color 0.2s ease, box-shadow 0.2s ease; /* transition-colors duration-200 に相当 */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* shadow-sm に相当 */
 }
 
-.toolbar button:hover {
-    background-color: #d0d0d0;
+.button:hover {
+    background-color: #0056b3; /* blue-600 に相当 */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
 }
+
+.button:disabled {
+    background-color: #6c757d; /* disabled color */
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.icon {
+    width: 18px; /* アイコンのサイズ */
+    height: 18px;
+    margin-right: 6px; /* テキストとの間隔 */
+    color: white; /* SVGの色を制御 */
+}
+
+/* 個別のボタンのスタイル (もし必要なら) */
+.runButton {
+    background-color: #28a745; /* green-500 に相当 */
+    margin-left: 1rem; /* ml-4 に相当 */
+}
+
+.runButton:hover {
+    background-color: #218838; /* green-600 に相当 */
+}
+
+.compileButton {
+    background-color: #6f42c1; /* purple-500 に相当 */
+}
+
+.compileButton:hover {
+    background-color: #5a2d9c; /* purple-600 に相当 */
+}
+
 
 .editorContainer {
-    flex-grow: 1; /* 残りのスペースを全て占める */
-    /* CodeMirror (uiw/react-codemirror 経由) が内部でスクロールバーを管理するため、
-       ここでは overflow: hidden; にしておくのが最適です。
-       uiw/react-codemirror の height="100%" と連動して機能します。 */
+    width: 100%;
+    height: 100%; /* calc(100% - 50px) に相当 */
+    border-bottom-left-radius: 8px;
+    border-bottom-right-radius: 8px;
     overflow: hidden;
 }
 
-/* uiw/react-codemirror は内部で CodeMirror のクラスを適用します。
-   直接 .cm-editor などを操作する必要は減りますが、もし必要ならここに追加します。
-   uiw のコンポーネントは、自動的に height と width を調整するはずです。
-*/
-.cm-editor {
-    /* uiw/react-codemirror が height="100%" を設定するので、
-       ここでは明示的に width: 100% などを設定する必要はほぼありません。
-       ただし、デフォルトのボーダーなどを消したい場合は必要です。
-    */
-    /* border: none; */
+.codemirrorContainer {
+    width: 100%;
+    height: 100%;
+    /* CodeMirror自体のスタイル調整が必要な場合ここに追記 */
+    /* 例: .cm-editor { height: 100%; } */
 }
 
-/* その他の CodeMirror のスタイル調整はここに記述 */
-.cm-scroller {
-    background-color: white; /* エディターの背景色を明示的に指定 */
+
+/* メッセージボックスのスタイル */
+.messageBoxOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5); /* bg-black bg-opacity-50 に相当 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999; /* z-50 に相当 */
 }
 
-.cm-gutter {
-    background-color: #f8f8f8; /* 行番号ガッターの背景色 */
-    color: #999; /* 行番号の文字色 */
+.messageBox {
+    background-color: white; /* bg-white に相当 */
+    padding: 24px; /* p-6 に相当 */
+    border-radius: 8px; /* rounded-lg に相当 */
+    box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1); /* shadow-xl に相当 */
+    max-width: 448px; /* max-w-sm に相当 */
+    width: 100%;
+    text-align: center;
+}
+
+.messageBoxContent {
+    color: #333; /* text-gray-800 に相当 */
+    font-size: 18px; /* text-lg に相当 */
+    margin-bottom: 16px; /* mb-4 に相当 */
+    white-space: pre-wrap;
+}
+
+.messageBoxButton {
+    padding: 8px 24px; /* px-6 py-2 に相当 */
+    background-color: #007bff; /* blue-500 に相当 */
+    color: white;
+    border-radius: 6px; /* rounded-md に相当 */
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.2s ease; /* transition-colors duration-200 に相当 */
+}
+
+.messageBoxButton:hover {
+    background-color: #0056b3; /* blue-600 に相当 */
 }
