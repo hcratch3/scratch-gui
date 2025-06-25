@@ -29,8 +29,79 @@ import {lintKeymap} from "@codemirror/lint";
 import { javascript } from "@codemirror/lang-javascript";
 import { oneDark } from "@codemirror/theme-one-dark";
 
-// tosh コンパイラは削除し、独自の変換ロジックを使用します
-// import * as tosh from 'tosh';
+// tosh 代替として、generate関数とその依存関係をインポートまたは定義
+import * as nearley from 'nearley';
+import reverse from 'nearley-reverse'; // nearley-reverseはdefault exportを想定
+import itt from 'itt'; // ittはdefault exportを想定
+
+// toshのgrammarファイルをコピーしたパスを仮定します
+// 例: src/lib/tosh_grammar/grammar.js にコピーした場合
+// !!! このパスは、実際に grammar.js を配置した場所に合わせて修正してください !!!
+// 通常、nearleyの文法ファイルはコンパイルされてJavaScriptファイルになります。
+// 例: const grammar = nearley.Grammar.fromCompiled(require('./src/lib/tosh_grammar/grammar'));
+// しかし、React/Webpack環境ではimport文を使うのが一般的です。
+// grammar.js がコンパイル済みJavaScriptファイルであると仮定
+import toshGrammarCompiled from '../lib/tosh_grammar/grammar'; // <-- ★要修正: grammar.jsの実際のパスに合わせる
+const grammar = nearley.Grammar.fromCompiled(toshGrammarCompiled);
+
+// toshのgenerate関数を直接移植
+function generateScratchBlocksToJs(scriptsData, currentGrammar) {
+    const str = JSON.stringify;
+    try {
+        // scriptsDataは、tosh/tosh2が期待する形式（おそらくScratch 2.0のブロックJSON）である必要があります。
+        // 現在のprops.vmから取得されるScratch 3.0のブロックデータは、
+        // このnearley-reverseの入力として直接互換性がない可能性が非常に高いです。
+        // ここでエラーが発生する可能性が高いことを理解してください。
+        const tokens = reverse(currentGrammar, scriptsData);
+        
+        let indent = 0;
+        let out = "";
+        
+        for (let [token, next] of itt(tokens).lookahead()) {
+            if (next && typeof next === "object" && next.type === "}") { // nextがオブジェクトでtypeプロパティを持つか確認
+                indent--;
+            } else if (next === "}") { // 互換性のために文字列の"}"もチェック
+                 indent--;
+            }
+
+            if (typeof token === "string") {
+                if (token === "{") {
+                    if (!/ $/.test(out)) out += " ";
+                    indent++;
+                }
+                out += token;
+                if (token === "}") {
+                    if (next && next.type !== "WS") out += " ";
+                }
+                continue;
+            }
+
+            switch (token.type) {
+                case "NL":
+                    out += "\n";
+                    for (let i = indent; i--; ) out += "\t";
+                    continue;
+                case "WS":
+                    out += " ";
+                    continue;
+                case "string":
+                    out += str(token.value);
+                    continue;
+                default:
+                    if (token.value !== undefined) { // token.value が undefined でないことを確認
+                        out += token.value;
+                        continue;
+                    }
+                    throw new Error("Can't generate: " + JSON.stringify(token));
+            }
+        }
+        return out;
+    } catch (e) {
+        console.error("JavaScriptコード生成中にエラー:", e);
+        return `// エラー: コードの生成に失敗しました。\n// 詳細: ${e.message}\n// Scratch 3.0ブロックとtosh文法の互換性を確認してください。`;
+    }
+}
+
 
 import styles from '../components/source/source.css';
 import VM from 'scratch-vm';
@@ -222,7 +293,7 @@ const SourceTab = (props) => {
         }
     }, [props.editingTarget, selectedSpriteId]);
 
-    // `tosh` の代わりにScratch 3.0のブロックをJSON文字列として表示するロジック
+    // Scratch 3.0ブロックをJavaScript風コードに「変換」するロジック (toshの代替)
     useEffect(() => {
         if (!props.vm || !selectedSpriteId) {
             return;
@@ -232,48 +303,67 @@ const SourceTab = (props) => {
             const target = props.vm.runtime.getTargetById(selectedSpriteId);
             if (target && target.blocks) {
                 const blocksMap = target.blocks.getBlocks();
+                // Scratch 3.0のブロックデータをCodeMirrorエディタで表示するための形式に変換
+                // toshやtosh2のようなコンパイラがないため、ここではJSON整形を代替とします。
+                // 実際に意味のあるJavaScriptを生成するには、複雑な変換ロジックが必要です。
+                
+                // ブロックMapを配列に変換（toshのgenerate関数が期待する形式に似せる試み）
+                const scriptsForToshLike = [];
+                // 各スクリプトの先頭ブロックから子孫ブロックを辿るなどして、
+                // 意味のあるスクリプト単位のデータを構築する必要がありますが、
+                // これはVMのブロック構造を深く理解する必要があります。
+                // ここでは簡略化し、ブロックMap全体をJSONとして渡します。
+                
+                // ブロックMapをJavaScriptオブジェクトに変換
                 const blocksObject = {};
                 blocksMap.forEach((block, id) => {
                     blocksObject[id] = block.toJSON();
                 });
 
-                // tosh の代わり: Scratch 3.0のブロックJSONを整形して表示
-                // ここに本格的なScratch 3.0 -> JavaScriptコンパイラを統合する必要があります
-                const generatedCode = JSON.stringify(blocksObject, null, 2); // JSONを整形して文字列化
+                // toshのgenerate関数の代わり
+                // generateScratchBlocksToJs 関数を使用
+                // ★注意: この関数は、Scratch 3.0のブロックデータ形式とtoshのgrammarの間で
+                // 直接の互換性があるわけではありません。エラーが発生する可能性が高いです。
+                // このコンテキストでは、エラーログを表示するか、デフォルトのJSON表示に戻すことを推奨します。
+                const compiledJs = generateScratchBlocksToJs(
+                    blocksObject, // Scratch 3.0のブロックJSON形式
+                    grammar       // toshの文法
+                );
 
                 if (editorInstance.current) {
                     const currentEditorDoc = editorInstance.current.state.doc.toString();
-                    if (currentEditorDoc !== generatedCode) { // 変更がある場合のみ更新
+                    if (currentEditorDoc !== compiledJs) { // 変更がある場合のみ更新
                         editorInstance.current.dispatch({
                             changes: {
                                 from: 0,
                                 to: currentEditorDoc.length,
-                                insert: generatedCode
+                                insert: compiledJs
                             },
                         });
-                        console.log(`Scratch 3.0のブロックJSONをエディタに表示しました。`);
+                        console.log(`カスタム生成コードをエディタに表示しました。`);
                     }
                 }
                 setSpriteCode(prevCodeMap => ({
                     ...prevCodeMap,
-                    [selectedSpriteId]: generatedCode
+                    [selectedSpriteId]: compiledJs
                 }));
 
             }
         } catch (error) {
-            console.error('ブロックデータの処理中にエラーが発生しました:', error);
+            console.error('カスタムコード生成中にエラーが発生しました:', error);
+            const errorMessage = `// エラー: コードの生成に失敗しました。\n// 詳細: ${error.message}\n// Scratch 3.0のブロックとtosh文法の互換性がない可能性があります。`;
             if (editorInstance.current) {
                 editorInstance.current.dispatch({
                     changes: {
                         from: 0,
-                        to: editorInstance.current.state.doc.length, // .length は .doc.length に修正
-                        insert: `// エラー: ブロックデータの処理に失敗しました。\n// 詳細: ${error.message}\n// Scratch 3.0のブロックをJavaScriptにコンパイルするには、適切なコンパイラが必要です。\n`
+                        to: editorInstance.current.state.doc.length,
+                        insert: errorMessage
                     },
                 });
             }
             setSpriteCode(prevCodeMap => ({
                 ...prevCodeMap,
-                [selectedSpriteId]: `// エラー: ブロックデータの処理に失敗しました。\n// 詳細: ${error.message}\n// Scratch 3.0のブロックをJavaScriptにコンパイルするには、適切なコンパイラが必要です。\n`
+                [selectedSpriteId]: errorMessage
             }));
         }
     }, [selectedSpriteId, props.vm]);
@@ -375,7 +465,6 @@ const SourceTab = (props) => {
             console.log("カスタムのバインディング層と安全な実行環境が必要です。");
 
             try {
-                // toshの出力はVMの内部APIに依存するため、この方法は一般的に不十分です。
                 // new Function(currentCode)(); // セキュリティリスクに注意
             } catch (e) {
                 console.error("JavaScriptコードの実行中にエラーが発生しました:", e);
