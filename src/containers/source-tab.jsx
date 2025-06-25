@@ -27,6 +27,7 @@ import {
 import {lintKeymap} from "@codemirror/lint";
 
 import { javascript } from "@codemirror/lang-javascript";
+import { oneDark } from "@codemirror/theme-one-dark";
 
 import styles from '../components/source/source.css';
 import VM from 'scratch-vm';
@@ -37,7 +38,7 @@ import errorBoundaryHOC from '../lib/error-boundary-hoc.jsx';
 // --- フェーズ1: ブロック -> コード (デコンパイラ) ロジック ---
 
 /**
- * Scratch 3.0のブロックデータをJavaScript風のコードに変換するデコンパイラ。
+ * Scratch 3.0のブロックデータをプログラミング初心者にも分かりやすいJavaScript風のコードに変換するデコンパイラ。
  * これは簡略化された実装であり、全てのブロックタイプや複雑な構造に対応するものではありません。
  *
  * @param {object | Map<string, Object>} blocksMap - VMから取得したブロックIDをキーとするブロックオブジェクトのMapまたはプレーンオブジェクト
@@ -47,7 +48,7 @@ import errorBoundaryHOC from '../lib/error-boundary-hoc.jsx';
  */
 const decompileBlockToJs = (blocksMap, startBlockId, indentLevel = 0) => {
     let code = '';
-    // 修正: blocksMapがMapかオブジェクトかに応じてgetまたはブラケット記法を使用
+    // blocksMapがMapかオブジェクトかに応じてgetまたはブラケット記法を使用するヘルパー関数
     const getBlockById = (map, id) => {
         if (!map || !id) return null;
         if (map instanceof Map) {
@@ -67,36 +68,46 @@ const decompileBlockToJs = (blocksMap, startBlockId, indentLevel = 0) => {
 
         // 値ブロック（VALUE, VARIABLE, LIST, BROADCAST_MESSAGE）
         if (input.block) {
-            const connectedBlock = getBlockById(blocksMap, input.block); // 修正: getBlockByIdを使用
+            const connectedBlock = getBlockById(blocksMap, input.block);
             if (connectedBlock) {
-                return decompileBlockToJs(blocksMap, connectedBlock.id, 0); // 入れ子ブロックはインデントなしで解決
+                // 入れ子ブロックはインデントなしで解決し、文字列または数値として返す
+                // math_numberの場合、直接fields.NUM.valueを使用
+                if (connectedBlock.opcode === 'math_number' && connectedBlock.fields && connectedBlock.fields.NUM) {
+                    return JSON.stringify(connectedBlock.fields.NUM.value);
+                }
+                // それ以外の値ブロック（例: 変数、演算結果）
+                return decompileBlockToJs(blocksMap, connectedBlock.id, 0).trim(); // trim()で余分な改行や空白を除去
             }
         }
         // シャドウブロック（非接続の値）やフィールド
         if (input.shadow) {
-            const shadowBlock = getBlockById(blocksMap, input.shadow); // 修正: getBlockByIdを使用
-            if (shadowBlock && shadowBlock.fields && shadowBlock.fields.TEXT) {
-                // シャドウブロックの値を取得 (例: sayブロックの初期テキスト)
-                return JSON.stringify(shadowBlock.fields.TEXT.value);
+            const shadowBlock = getBlockById(blocksMap, input.shadow);
+            if (shadowBlock) {
+                // シャドウブロックの値を解決 (数値、文字列など)
+                if (shadowBlock.opcode === 'math_number' && shadowBlock.fields && shadowBlock.fields.NUM) {
+                    return JSON.stringify(shadowBlock.fields.NUM.value);
+                }
+                // その他のシャドウブロックの値 (例: sayのテキストボックス)
+                if (shadowBlock.fields && shadowBlock.fields.TEXT) {
+                    return JSON.stringify(shadowBlock.fields.TEXT.value);
+                }
             }
         }
+        // フィールド（例: 変数名、メッセージ名）
         if (input.fields && input.fields.VARIABLE) {
-            return JSON.stringify(input.fields.VARIABLE.value); // 変数の名前を文字列として取得
+            return JSON.stringify(input.fields.VARIABLE.value);
         }
-        // デフォルトのフィールド値（数字、文字列など）
-        // Scratch 3.0の数値ブロックの場合、input.valueではなくconnectedBlock.fields.NUM.valueを見る必要がある
-        // decompileBlockToJs内でmath_numberが既に処理されるため、ここでは文字列化のみ
-        if (input.value !== undefined) { 
-            return JSON.stringify(input.value); 
+        // デフォルトの直接値 (あまり使われないが念のため)
+        if (input.value !== undefined) {
+            return JSON.stringify(input.value);
         }
-        return 'null'; // 解決できない場合はnull
+        return 'null'; // 解決できない場合
     };
 
-    // ヘルパー関数: フィールドの値を解決
+    // ヘルパー関数: フィールドの値を解決 (主にドロップダウンや変数名)
     const resolveField = (field) => {
         if (!field) return 'undefined';
         if (field.value !== undefined) {
-            // 文字列の場合はクォートを付け、それ以外はそのまま
             return typeof field.value === 'string' ? JSON.stringify(field.value) : field.value;
         }
         return 'null';
@@ -111,42 +122,42 @@ const decompileBlockToJs = (blocksMap, startBlockId, indentLevel = 0) => {
         switch (opcode) {
             // --- イベントブロック ---
             case 'event_whenflagclicked':
-                line += `whenGreenFlagClicked(() => {\n`;
+                line += `onGreenFlagClicked() {\n`;
                 line += decompileBlockToJs(blocksMap, currentBlock.next, indentLevel + 1);
-                line += `${indent}});`;
+                line += `${indent}}`;
                 currentBlock = null; // ハットブロックなので次はない
                 break;
             case 'event_whenkeypressed':
-                line += `whenKeyPressed(${resolveField(fields.KEY_OPTION)}, () => {\n`;
+                line += `onKeyPressed(${resolveField(fields.KEY_OPTION)}) {\n`;
                 line += decompileBlockToJs(blocksMap, currentBlock.next, indentLevel + 1);
-                line += `${indent}});`;
+                line += `${indent}}`;
                 currentBlock = null;
                 break;
             case 'event_whenthisspriteclicked':
-                line += `whenSpriteClicked(() => {\n`;
+                line += `onSpriteClicked() {\n`;
                 line += decompileBlockToJs(blocksMap, currentBlock.next, indentLevel + 1);
-                line += `${indent}});`;
+                line += `${indent}}`;
                 currentBlock = null;
                 break;
             case 'event_whenbroadcastreceived':
-                line += `whenIReceive(${resolveField(fields.BROADCAST_OPTION)}, () => {\n`;
+                line += `onReceive(${resolveField(fields.BROADCAST_OPTION)}) {\n`;
                 line += decompileBlockToJs(blocksMap, currentBlock.next, indentLevel + 1);
-                line += `${indent}});`;
+                line += `${indent}}`;
                 currentBlock = null;
                 break;
 
             // --- 動きブロック ---
             case 'motion_movesteps':
-                line += `move(${resolveInput(inputs.STEPS)}) steps;`; // stepsを省略
+                line += `move(${resolveInput(inputs.STEPS)});`;
                 break;
             case 'motion_turnright':
-                line += `turnRight(${resolveInput(inputs.DEGREES)}) degrees;`;
+                line += `turnRight(${resolveInput(inputs.DEGREES)});`;
                 break;
             case 'motion_turnleft':
-                line += `turnLeft(${resolveInput(inputs.DEGREES)}) degrees;`;
+                line += `turnLeft(${resolveInput(inputs.DEGREES)});`;
                 break;
             case 'motion_goto':
-                line += `goTo(${resolveInput(inputs.TO)});`; // 例: mouse-pointer, random position, sprite name
+                line += `goTo(${resolveInput(inputs.TO)});`;
                 break;
             case 'motion_gotoxy':
                 line += `goToX(${resolveInput(inputs.X)}), Y(${resolveInput(inputs.Y)});`;
@@ -166,13 +177,13 @@ const decompileBlockToJs = (blocksMap, startBlockId, indentLevel = 0) => {
 
             // --- 見た目ブロック ---
             case 'looks_sayforsecs':
-                line += `say(${resolveInput(inputs.MESSAGE)}) for ${resolveInput(inputs.SECS)} secs;`;
+                line += `say(${resolveInput(inputs.MESSAGE)}, ${resolveInput(inputs.SECS)});`;
                 break;
             case 'looks_say':
                 line += `say(${resolveInput(inputs.MESSAGE)});`;
                 break;
             case 'looks_thinkforsecs':
-                line += `think(${resolveInput(inputs.MESSAGE)}) for ${resolveInput(inputs.SECS)} secs;`;
+                line += `think(${resolveInput(inputs.MESSAGE)}, ${resolveInput(inputs.SECS)});`;
                 break;
             case 'looks_think':
                 line += `think(${resolveInput(inputs.MESSAGE)});`;
@@ -192,20 +203,20 @@ const decompileBlockToJs = (blocksMap, startBlockId, indentLevel = 0) => {
 
             // --- 制御ブロック ---
             case 'control_wait':
-                line += `wait(${resolveInput(inputs.DURATION)}) seconds;`;
+                line += `wait(${resolveInput(inputs.DURATION)});`;
                 break;
             case 'control_repeat':
-                line += `repeat(${resolveInput(inputs.TIMES)}, () => {\n`;
-                line += decompileBlockToJs(blocksMap, inputs.SUBSTACK.block, indentLevel + 1); // SUBSTACKの中身
-                line += `${indent}});`;
+                line += `repeat(${resolveInput(inputs.TIMES)}) {\n`;
+                line += decompileBlockToJs(blocksMap, inputs.SUBSTACK.block, indentLevel + 1);
+                line += `${indent}}`;
                 break;
             case 'control_forever':
-                line += `forever(() => {\n`;
+                line += `forever() {\n`;
                 line += decompileBlockToJs(blocksMap, inputs.SUBSTACK.block, indentLevel + 1);
-                line += `${indent}});`;
+                line += `${indent}}`;
                 break;
             case 'control_if':
-                line += `if (${decompileBlockToJs(blocksMap, inputs.CONDITION.block, 0)}) {\n`; // CONDITIONは別途解決
+                line += `if (${decompileBlockToJs(blocksMap, inputs.CONDITION.block, 0)}) {\n`;
                 line += decompileBlockToJs(blocksMap, inputs.SUBSTACK.block, indentLevel + 1);
                 line += `${indent}}`;
                 break;
@@ -213,7 +224,7 @@ const decompileBlockToJs = (blocksMap, startBlockId, indentLevel = 0) => {
                 line += `if (${decompileBlockToJs(blocksMap, inputs.CONDITION.block, 0)}) {\n`;
                 line += decompileBlockToJs(blocksMap, inputs.SUBSTACK.block, indentLevel + 1);
                 line += `${indent}} else {\n`;
-                line += decompileBlockToJs(blocksMap, inputs.SUBSTACK2.block, indentLevel + 1); // SUBSTACK2
+                line += decompileBlockToJs(blocksMap, inputs.SUBSTACK2.block, indentLevel + 1);
                 line += `${indent}}`;
                 break;
             
@@ -252,7 +263,7 @@ const decompileBlockToJs = (blocksMap, startBlockId, indentLevel = 0) => {
                 line += `!(${decompileBlockToJs(blocksMap, inputs.OPERAND.block, 0)})`;
                 break;
             case 'operator_join':
-                line += `\`\$\{${decompileBlockToJs(blocksMap, inputs.STRING1.block, 0)}\}\$\{${decompileBlockToJs(blocksMap, inputs.STRING2.block, 0)}\}\``;
+                line += `join(${decompileBlockToJs(blocksMap, inputs.STRING1.block, 0)}, ${decompileBlockToJs(blocksMap, inputs.STRING2.block, 0)})`;
                 break;
 
             // --- 変数ブロック ---
@@ -262,11 +273,16 @@ const decompileBlockToJs = (blocksMap, startBlockId, indentLevel = 0) => {
             case 'data_changevariableby':
                 line += `changeVariableBy(${resolveField(fields.VARIABLE)}, ${resolveInput(inputs.VALUE)});`;
                 break;
-            case 'data_variable': // 変数名を取得
+            case 'data_variable': // 変数名を取得 (reporter)
                 line += `${resolveField(fields.VARIABLE)}`;
                 break;
             
-            // --- その他 ---
+            // --- 数値リテラル (reporter) ---
+            case 'math_number':
+                line += `${resolveField(fields.NUM)}`;
+                break;
+
+            // --- その他 (reporter) ---
             case 'sensing_askandwait':
                 line += `ask(${resolveInput(inputs.QUESTION)});`;
                 break;
@@ -274,33 +290,30 @@ const decompileBlockToJs = (blocksMap, startBlockId, indentLevel = 0) => {
                 line += `answer`;
                 break;
             case 'looks_backdropname':
-                line += `backdropName`; // レポーターブロック
+                line += `backdropName`;
                 break;
             case 'looks_costume':
-                line += `costumeName`; // レポーターブロック
+                line += `costumeName`;
                 break;
             case 'motion_xposition':
-                line += `xPosition`; // レポーターブロック
+                line += `xPosition`;
                 break;
             case 'motion_yposition':
-                line += `yPosition`; // レポーターブロック
+                line += `yPosition`;
                 break;
             case 'motion_direction':
-                line += `direction`; // レポーターブロック
-                break;
-            case 'math_number': // ★math_numberブロックの処理を追加
-                line += `${resolveField(fields.NUM)}`;
+                line += `direction`;
                 break;
 
             default:
-                // 未対応のブロックはJSON形式で出力するか、コメントアウト
+                // 未対応のブロックはコメントアウトして、元のJSON情報を出力
                 line += `// Unsupported Block: ${opcode} ${JSON.stringify(currentBlock, null, 2).replace(/\n/g, `\n${indent}// `)}`;
                 break;
         }
 
         code += line + '\n';
         if (currentBlock && currentBlock.next) {
-            currentBlock = getBlockById(blocksMap, currentBlock.next); // 修正: getBlockByIdを使用
+            currentBlock = getBlockById(blocksMap, currentBlock.next);
         } else {
             currentBlock = null;
         }
@@ -410,6 +423,7 @@ const SourceTab = (props) => {
                 highlightActiveLineGutter(),
                 highlightSelectionMatches(),
                 javascript(), // JavaScriptシンタックスハイライトを使用
+                oneDark,
                 EditorView.lineWrapping,
                 keymap.of([
                     ...closeBracketsKeymap,
@@ -468,8 +482,7 @@ const SourceTab = (props) => {
         }
     }, [props.editingTarget, selectedSpriteId]);
 
-    // Scratch 3.0ブロックをJavaScript風コードに「変換」して表示するロジック
-    // フェーズ1: ブロック -> コード (デコンパイラ)
+    // Scratch 3.0ブロックをJavaScript風コードに「変換」して表示するロジック (デコンパイラ・フェーズ1)
     useEffect(() => {
         if (!props.vm || !selectedSpriteId) {
             return;
@@ -481,11 +494,9 @@ const SourceTab = (props) => {
                 const blocksMap = target.blocks._blocks; 
                 
                 let allBlocks = [];
-                // blocksMapがMapインスタンスかどうかを確認し、適切に値を抽出
                 if (blocksMap instanceof Map) {
                     allBlocks = Array.from(blocksMap.values());
                 } else if (typeof blocksMap === 'object' && blocksMap !== null) {
-                    // Mapではないがオブジェクトの場合（例: 単なるJSONオブジェクト）、Object.valuesを使用
                     allBlocks = Object.values(blocksMap);
                 } else {
                     console.warn("blocksMapはMapでもプレーンなオブジェクトでもありません:", blocksMap);
@@ -503,14 +514,10 @@ const SourceTab = (props) => {
                         ...prevCodeMap,
                         [selectedSpriteId]: errorMessage
                     }));
-                    return; // 処理を中断
+                    return;
                 }
 
-
                 let generatedCode = '';
-                // スクリプトの開始ブロック（ハットブロック）を探す
-                // Scratch 3.0 VMのブロックは、スクリプトごとに先頭ブロックのIDを持つわけではないため、
-                // ブロックMapを走査してparentがnullのブロック（独立したスクリプトの開始ブロック）を見つけます。
                 const topLevelBlocks = allBlocks.filter(
                     block => block.topLevel && !block.parent
                 );
@@ -519,14 +526,13 @@ const SourceTab = (props) => {
                     generatedCode += decompileBlockToJs(blocksMap, block.id, 0) + '\n';
                 });
 
-                // 生成されたコードが空の場合は、エラーメッセージをクリア
                 if (generatedCode.trim() === '') {
                     generatedCode = '// スクリプトがありません。ブロックを追加してください。';
                 }
 
                 if (editorInstance.current) {
                     const currentEditorDoc = editorInstance.current.state.doc.toString();
-                    if (currentEditorDoc !== generatedCode) { // 変更がある場合のみ更新
+                    if (currentEditorDoc !== generatedCode) {
                         editorInstance.current.dispatch({
                             changes: {
                                 from: 0,
@@ -542,50 +548,38 @@ const SourceTab = (props) => {
                     [selectedSpriteId]: generatedCode
                 }));
 
-            } } catch (error) {
-                console.error('ブロックデータのデコンパイル中にエラーが発生しました:', error);
-                const errorMessage = `// エラー: ブロックデータのデコンパイルに失敗しました。\n// 詳細: ${error.message}\n// 現在はデコンパイルされたJSONデータが表示されています。`;
-                if (editorInstance.current) {
-                    editorInstance.current.dispatch({
-                        changes: {
-                            from: 0,
-                            to: editorInstance.current.state.doc.length,
-                            insert: errorMessage
-                        },
-                    });
-                }
-                setSpriteCode(prevCodeMap => ({
-                    ...prevCodeMap,
-                    [selectedSpriteId]: errorMessage
-                }));
             }
+        } catch (error) {
+            console.error('ブロックデータのデコンパイル中にエラーが発生しました:', error);
+            const errorMessage = `// エラー: ブロックデータのデコンパイルに失敗しました。\n// 詳細: ${error.message}\n// デコンパイラに未対応のブロックが含まれている可能性があります。`;
+            if (editorInstance.current) {
+                editorInstance.current.dispatch({
+                    changes: {
+                        from: 0,
+                        to: editorInstance.current.state.doc.length,
+                        insert: errorMessage
+                    },
+                });
+            }
+            setSpriteCode(prevCodeMap => ({
+                ...prevCodeMap,
+                [selectedSpriteId]: errorMessage
+            }));
         }
-    , [selectedSpriteId, props.vm]); // props.vm を依存配列に含めることでVMの変化を捉える
+    }, [selectedSpriteId, props.vm]);
 
-    // Update editor content when selectedSpriteId or spriteCode changes (unchanged)
-    // このuseEffectは、デコンパイラによる自動更新と競合する可能性があるため、
-    // 必要に応じてロジックの見直しや削除を検討してください。
-    // 現状は、デコンパイラが優先されるように動作します。
+    // selectedSpriteId または spriteCode が変更されたときにエディタの内容を更新 (今回はデコンパイラからの自動更新を優先)
     useEffect(() => {
         if (!editorInstance.current || !selectedSpriteId) {
             return;
         }
-
-        const newCode = spriteCode[selectedSpriteId] || '';
-        // ★今回はエディタ表示を固定メッセージにするため、この自動更新ロジックはコメントアウトします。
-        // if (editorInstance.current.state.doc.toString() !== newCode) {
-        //     editorInstance.current.dispatch({
-        //         changes: {
-        //             from: 0,
-        //             to: editorInstance.current.state.doc.length,
-        //             insert: newCode
-        //         },
-        //     });
-        //     console.log(`Editor content updated for sprite ID ${selectedSpriteId}.`);
-        // }
+        // ここはデコンパイラのuseEffectがCodeMirrorのコンテンツを更新するため、
+        // ユーザーが手動でCodeMirrorを編集した際のhandleCodeChangeとは別に動作します。
+        // デコンパイラのロジックが優先されるため、ここでは特別な処理は不要です。
+        // もしユーザーの手動編集を保持したい場合は、より複雑な同期ロジックが必要です。
     }, [selectedSpriteId, spriteCode]);
 
-    // Monitor changes to props.sprites or props.stage and update spriteCode (unchanged)
+    // props.sprites または props.stage の変更を監視し、spriteCode を更新 (変更なし)
     useEffect(() => {
         const newCodeMap = {};
         let changed = false;
@@ -616,7 +610,7 @@ const SourceTab = (props) => {
         }
     }, [props.sprites, props.stage, spriteCode]);
 
-    // Toolbar action handlers (unchanged)
+    // Toolbar action handlers (変更なし)
     const handleUndo = useCallback(() => {
         if (editorInstance.current) {
             undo(editorInstance.current);
