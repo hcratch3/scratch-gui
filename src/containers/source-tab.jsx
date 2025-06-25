@@ -27,7 +27,6 @@ import {
 import {lintKeymap} from "@codemirror/lint";
 
 import { javascript } from "@codemirror/lang-javascript";
-import { oneDark } from "codemirror/theme-one-dark";
 
 import styles from '../components/source/source.css';
 import VM from 'scratch-vm';
@@ -405,7 +404,6 @@ const SourceTab = (props) => {
                 highlightActiveLineGutter(),
                 highlightSelectionMatches(),
                 javascript(), // JavaScriptシンタックスハイライトを使用
-                oneDark,
                 EditorView.lineWrapping,
                 keymap.of([
                     ...closeBracketsKeymap,
