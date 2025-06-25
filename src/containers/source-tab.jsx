@@ -71,10 +71,10 @@ const decompileBlockToJs = (blocksMap, startBlockId, indentLevel = 0) => {
             }
         }
         if (input.fields && input.fields.VARIABLE) {
-            return input.fields.VARIABLE.value; // 変数の名前
+            return JSON.stringify(input.fields.VARIABLE.value); // 変数の名前を文字列として取得
         }
         // デフォルトのフィールド値（数字、文字列など）
-        if (input.value) { // フィールドの直接的な値 (例: motion_movestepsのステップ数)
+        if (input.value !== undefined) { // フィールドの直接的な値 (例: motion_movestepsのステップ数)
             return JSON.stringify(input.value); // 数値も文字列として扱えるようJSON.stringify
         }
         return 'null'; // 解決できない場合はnull
@@ -466,11 +466,38 @@ const SourceTab = (props) => {
             if (target && target.blocks) {
                 const blocksMap = target.blocks._blocks; 
                 
+                let allBlocks = [];
+                // blocksMapがMapインスタンスかどうかを確認し、適切に値を抽出
+                if (blocksMap instanceof Map) {
+                    allBlocks = Array.from(blocksMap.values());
+                } else if (typeof blocksMap === 'object' && blocksMap !== null) {
+                    // Mapではないがオブジェクトの場合（例: 単なるJSONオブジェクト）、Object.valuesを使用
+                    allBlocks = Object.values(blocksMap);
+                } else {
+                    console.warn("blocksMapはMapでもプレーンなオブジェクトでもありません:", blocksMap);
+                    const errorMessage = `// エラー: ブロックデータが予期せぬ形式です。\n// 詳細: blocksMapがMapでもオブジェクトでもありません。\n// 現在はブロックのJSONデータが表示されています。`;
+                    if (editorInstance.current) {
+                        editorInstance.current.dispatch({
+                            changes: {
+                                from: 0,
+                                to: editorInstance.current.state.doc.length,
+                                insert: errorMessage
+                            },
+                        });
+                    }
+                    setSpriteCode(prevCodeMap => ({
+                        ...prevCodeMap,
+                        [selectedSpriteId]: errorMessage
+                    }));
+                    return; // 処理を中断
+                }
+
+
                 let generatedCode = '';
                 // スクリプトの開始ブロック（ハットブロック）を探す
                 // Scratch 3.0 VMのブロックは、スクリプトごとに先頭ブロックのIDを持つわけではないため、
                 // ブロックMapを走査してparentがnullのブロック（独立したスクリプトの開始ブロック）を見つけます。
-                const topLevelBlocks = Array.from(blocksMap.values()).filter(
+                const topLevelBlocks = allBlocks.filter(
                     block => block.topLevel && !block.parent
                 );
 
