@@ -29,8 +29,8 @@ import {lintKeymap} from "@codemirror/lint";
 import { javascript } from "@codemirror/lang-javascript";
 import { oneDark } from "@codemirror/theme-one-dark";
 
-// tosh2 コンパイラをインポート
-import * as tosh2 from 'tosh2';
+// tosh コンパイラは削除し、独自の変換ロジックを使用します
+// import * as tosh from 'tosh';
 
 import styles from '../components/source/source.css';
 import VM from 'scratch-vm';
@@ -222,7 +222,7 @@ const SourceTab = (props) => {
         }
     }, [props.editingTarget, selectedSpriteId]);
 
-    // `tosh2` を使用してScratchブロックをJavaScriptにコンパイルするロジック (変更なし)
+    // `tosh` の代わりにScratch 3.0のブロックをJSON文字列として表示するロジック
     useEffect(() => {
         if (!props.vm || !selectedSpriteId) {
             return;
@@ -237,41 +237,43 @@ const SourceTab = (props) => {
                     blocksObject[id] = block.toJSON();
                 });
 
-                const compiledJs = tosh2.compile(blocksObject);
+                // tosh の代わり: Scratch 3.0のブロックJSONを整形して表示
+                // ここに本格的なScratch 3.0 -> JavaScriptコンパイラを統合する必要があります
+                const generatedCode = JSON.stringify(blocksObject, null, 2); // JSONを整形して文字列化
 
                 if (editorInstance.current) {
                     const currentEditorDoc = editorInstance.current.state.doc.toString();
-                    if (currentEditorDoc !== compiledJs) {
+                    if (currentEditorDoc !== generatedCode) { // 変更がある場合のみ更新
                         editorInstance.current.dispatch({
                             changes: {
                                 from: 0,
                                 to: currentEditorDoc.length,
-                                insert: compiledJs
+                                insert: generatedCode
                             },
                         });
-                        console.log(`tosh2でコンパイルされたコードをエディタに表示しました。`);
+                        console.log(`Scratch 3.0のブロックJSONをエディタに表示しました。`);
                     }
                 }
                 setSpriteCode(prevCodeMap => ({
                     ...prevCodeMap,
-                    [selectedSpriteId]: compiledJs
+                    [selectedSpriteId]: generatedCode
                 }));
 
             }
         } catch (error) {
-            console.error('tosh2でのコンパイルに失敗しました:', error);
+            console.error('ブロックデータの処理中にエラーが発生しました:', error);
             if (editorInstance.current) {
                 editorInstance.current.dispatch({
                     changes: {
                         from: 0,
-                        to: editorInstance.current.state.doc.length,
-                        insert: `// コンパイルエラー: ${error.message}\n`
+                        to: editorInstance.current.state.doc.length, // .length は .doc.length に修正
+                        insert: `// エラー: ブロックデータの処理に失敗しました。\n// 詳細: ${error.message}\n// Scratch 3.0のブロックをJavaScriptにコンパイルするには、適切なコンパイラが必要です。\n`
                     },
                 });
             }
             setSpriteCode(prevCodeMap => ({
                 ...prevCodeMap,
-                [selectedSpriteId]: `// コンパイルエラー: ${error.message}\n`
+                [selectedSpriteId]: `// エラー: ブロックデータの処理に失敗しました。\n// 詳細: ${error.message}\n// Scratch 3.0のブロックをJavaScriptにコンパイルするには、適切なコンパイラが必要です。\n`
             }));
         }
     }, [selectedSpriteId, props.vm]);
@@ -326,7 +328,7 @@ const SourceTab = (props) => {
         }
     }, [props.sprites, props.stage, spriteCode]);
 
-    // ツールバーのアクションハンドラ
+    // ツールバーのアクションハンドラ (変更なし)
     const handleUndo = useCallback(() => {
         if (editorInstance.current) {
             undo(editorInstance.current);
@@ -361,7 +363,6 @@ const SourceTab = (props) => {
         }
     }, []);
 
-    // **新規追加**: コンパイルされたJavaScriptコードを実行するためのハンドラ
     const handleRunCompiledCode = useCallback(() => {
         if (editorInstance.current) {
             const currentCode = editorInstance.current.state.doc.toString();
@@ -373,18 +374,9 @@ const SourceTab = (props) => {
             console.log("VMを操作するには、コンパイルされたJSとVMのAPIを橋渡しする");
             console.log("カスタムのバインディング層と安全な実行環境が必要です。");
 
-            // 例: もしJavaScriptコードがシンプルな関数定義であれば、
-            // new Function() で実行を試みることもできますが、
-            // tosh2の出力はVM内部のAPIを直接叩くものなので、
-            // 通常はそのままでは動きません。
-            // 非常に単純なconsole.logなどを含むコードであれば実行されます。
             try {
-                // セキュリティリスクを理解した上でのデモンストレーション用途
-                // 実際のアプリケーションでは、より安全なサンドボックス化が必要です。
-                // 例: new Function('console.log("Hello from compiled JS!");')();
-                // tosh2の出力はVMの内部APIに依存するため、この方法は一般的に不十分です。
-                // const func = new Function(currentCode);
-                // func();
+                // toshの出力はVMの内部APIに依存するため、この方法は一般的に不十分です。
+                // new Function(currentCode)(); // セキュリティリスクに注意
             } catch (e) {
                 console.error("JavaScriptコードの実行中にエラーが発生しました:", e);
             }
